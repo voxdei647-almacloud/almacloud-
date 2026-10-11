@@ -1,4 +1,4 @@
--- ALMA CLOUD - migración 0001: tenants y sensors con RLS. Se ejecuta UNA vez.
+-- ALMA CLOUD - migración 0001: tenants y sensors con RLS.
 BEGIN;
 SET LOCAL ROLE alma_migrator;
 
@@ -29,10 +29,11 @@ ALTER TABLE alma.tenants FORCE  ROW LEVEL SECURITY;
 ALTER TABLE alma.sensors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alma.sensors FORCE  ROW LEVEL SECURITY;
 
-CREATE POLICY tenants_self ON alma.tenants FOR SELECT TO alma_app
+-- Políticas dirigidas a PUBLIC para permitir la ejecución de funciones SECURITY DEFINER
+CREATE POLICY tenants_self ON alma.tenants FOR SELECT TO PUBLIC
   USING (id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
-CREATE POLICY tenant_isolation ON alma.sensors FOR ALL TO alma_app
+CREATE POLICY tenant_isolation ON alma.sensors FOR ALL TO PUBLIC
   USING      (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
   WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 

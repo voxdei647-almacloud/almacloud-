@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.api.v1.sensors import router as sensors_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -7,6 +8,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+app.include_router(sensors_router, prefix="/api/v1")
 
 
 @app.get("/healthz", tags=["Health"])

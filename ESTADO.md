@@ -1,6 +1,6 @@
 # ESTADO DEL PROYECTO — ALMA CLOUD
 
-> **Última actualización:** Validación E2E Integral Completa (8/8 Suites PASS - 100% de Pruebas Exitosas).
+> **Última actualización:** Validación E2E Integral con Ingesta EVE Suricata (9/9 Suites PASS - 100% de Pruebas Exitosas).
 
 ## 1. Infraestructura Base (Incremento 0)
 - **PostgreSQL 16**, **Valkey 8** y **OpenSearch 2.19.6** operativos en Docker Compose.
@@ -15,8 +15,8 @@
 - **Seguridad & Autenticación:** Hashing Argon2id, firmado/verificación JWT HS256 y protección Bearer (`PASS AUTH1-AUTH3, SEC1-SEC2`).
 - **Control de Acceso (RBAC):** Permisos de API restringidos por roles (`admin`, `analyst`, `sensor`, `system`) (`PASS RBAC1-RBAC5`).
 - **Gestión de Sensores:** Enrolamiento seguro `/api/v1/sensors/enrollment` y verificación de `X-API-Key` (`PASS ENROLL1-ENROLL2, SAK1-SAK2`).
-- **Ingesta Masiva de Telemetría:** Inserción por lotes en OpenSearch vía Bulk API (`POST /api/v1/telemetry/events/batch`) (`PASS BATCH1`).
+- **Ingesta de Telemetría:** Inserción por lotes Bulk y normalización EVE Suricata (`POST /api/v1/telemetry/suricata/eve-batch`) (`PASS BATCH1, PARSER1, EVE1`).
 
 ## 4. Próximos Pasos
-- Módulo de Parsing y Normalización EVE JSON (Suricata / NIDS) a esquema estandarizado de alertas ALMA.
-- Motor de Reglas de Alerta y Notificación en Tiempo Real.
+- Motor de Evaluación y Generación de Alertas de Seguridad en Tiempo Real (Alert Rule Engine).
+- Notificación y Despacho de Eventos de Alta Severidad (`critical`/`high`).

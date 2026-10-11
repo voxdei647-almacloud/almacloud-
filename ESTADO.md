@@ -1,6 +1,6 @@
 # ESTADO DEL PROYECTO — ALMA CLOUD
 
-> **Última actualización:** Cobertura Global de Control de Acceso Basado en Roles (RBAC) en API Control Plane.
+> **Última actualización:** Validación E2E Integral (100% PASS en API, Valkey, OpenSearch, JWT y RBAC).
 
 ## 1. Infraestructura Base (Incremento 0)
 - **PostgreSQL 16**, **Valkey 8** y **OpenSearch 2.19.6** operativos en Docker Compose.
@@ -14,10 +14,10 @@
 ## 3. Capa de Servicios Backend (FastAPI / Python)
 - **Capa de Datos:** SQLAlchemy 2.0 Async + AsyncPG bajo el rol `alma_app` con RLS en `tenants`, `users`, `sensors` y `audit_logs` (`PASS API1-API5`).
 - **Capa de Seguridad & Autenticación:** Hashing Argon2id, firmado/verificación JWT HS256, inyección de usuario (`get_current_user`) y protección Bearer (`PASS AUTH1-AUTH3, SEC1-SEC2`).
-- **Control de Acceso (RBAC):** Restricción de permisos granular por roles (`admin`, `analyst`, `sensor`, `system`) con respuesta `403 Forbidden` (`PASS RBAC1-RBAC5`).
+- **Control de Acceso (RBAC):** Restricción de permisos granular por roles (`admin`, `analyst`, `sensor`, `system`) (`PASS RBAC1-RBAC5`).
 - **Capa de Cache:** Valkey Async (`redis-py`) con espacio de nombres (`tenant:<id>:sensor:<id>:heartbeat`) y TTL de 5 min (`PASS VK1-VK3`).
 - **Capa de Telemetría:** OpenSearch Async (`opensearch-py` + `aiohttp`) con filtro estricto por `tenant_id` (`PASS OS1-OS3`).
 
 ## 4. Próximos Pasos
-- Integrador maestro de pruebas E2E (`scripts/run_all_tests.sh`) para ejecución unificada de la suite de validación.
-- Módulo de Enrolamiento y Emisión de API Keys / Tokens para Agentes y Sensores (`/api/v1/sensors/enrollment`).
+- Módulo de Enrolamiento de Agentes/Sensores y Emisión de API Keys (`/api/v1/sensors/enrollment`).
+- Middleware de Ingesta Masiva y Batching de Telemetría desde NIDS (Suricata).

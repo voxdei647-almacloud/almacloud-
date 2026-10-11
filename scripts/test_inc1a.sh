@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-PSQL="docker exec -i alma-cloud-dev-postgres psql -U postgres -d postgres -t -A"
-PSQL_APP="docker exec -i alma-cloud-dev-postgres psql -U alma_app -d postgres -t -A"
+PSQL="docker exec -i alma-cloud-dev-postgres psql -U alma_dev -d alma_cloud -t -A"
+PSQL_APP="docker exec -i alma-cloud-dev-postgres psql -U alma_app -d alma_cloud -t -A"
 
 # Asegurar tenants de prueba
 $PSQL -c "INSERT INTO tenants (id, slug, name) VALUES ('00000000-0000-0000-0000-000000000001', 'tenant-a', 'Tenant A') ON CONFLICT DO NOTHING;" > /dev/null
@@ -22,7 +22,7 @@ run_test() {
     if echo "$res" | grep -qi "violates row-level security policy"; then
         res_clean="ERROR_RLS"
     else
-        res_clean=$(echo "$res" | tr -d '\r' | xargs)
+        res_clean=$(echo "$res" | tail -n 1 | tr -d '\r' | xargs)
     fi
 
     if [ "$res_clean" = "$expected" ]; then

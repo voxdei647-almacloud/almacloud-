@@ -57,6 +57,7 @@ echo "Sensor ID Creado: $SENSOR_ID"
 
 echo "=== 3. Enviar Heartbeat a Valkey ==="
 hb_res=$(curl -s -X POST "http://127.0.0.1:8000/api/v1/sensors/$SENSOR_ID/heartbeat" \
+  -H "Authorization: Bearer $TOKEN_A" \
   -H "X-Tenant-ID: $TENANT_A")
 
 if echo "$hb_res" | grep -q '"status":"online"'; then

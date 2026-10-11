@@ -15,6 +15,7 @@ from app.services.suricata_parser import parse_eve_event
 from app.services.alert_engine import AlertRuleEngine
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.services.ml_engine import MLInferenceEngine
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
@@ -22,12 +23,23 @@ INDEX_NAME = "alma-telemetry-v1"
 WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL")
 
 
+def _evaluate_ml_if_enabled(event_dict: Dict[str, Any]) -> Dict[str, Any]:
+    if settings.ENABLE_ML_DETECTION:
+        return MLInferenceEngine.evaluate_event(event_dict)
+    return {
+        "anomaly_score": 0.0,
+        "risk_level": "low",
+        "cluster_id": 0,
+        "is_anomaly": False
+    }
+
+
 @router.post("/events", status_code=status.HTTP_201_CREATED)
 async def ingest_telemetry_event(
     event_in: TelemetryCreate,
     db: AsyncSession = Depends(get_db),
     os_client: AsyncOpenSearch = Depends(get_opensearch),
-    current_user: User = Depends(require_roles("admin", "sensor", "system"))
+    current_user: User = Depends(require_roles("super_admin", "tenant_admin", "admin", "sensor", "system"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()
@@ -45,8 +57,7 @@ async def ingest_telemetry_event(
         "raw_event": event_in.raw_event
     }
 
-    # Inferencia de ML (IsolationForest + KMeans + Risk Level)
-    ml_eval = MLInferenceEngine.evaluate_event(event_dict)
+    ml_eval = _evaluate_ml_if_enabled(event_dict)
 
     doc = {
         "tenant_id": tenant_id_str,
@@ -87,7 +98,7 @@ async def ingest_telemetry_batch(
     batch_in: TelemetryBatchCreate,
     db: AsyncSession = Depends(get_db),
     os_client: AsyncOpenSearch = Depends(get_opensearch),
-    current_user: User = Depends(require_roles("admin", "sensor", "system"))
+    current_user: User = Depends(require_roles("super_admin", "tenant_admin", "admin", "sensor", "system"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()
@@ -108,7 +119,7 @@ async def ingest_telemetry_batch(
             "severity": item.severity,
             "raw_event": item.raw_event
         }
-        ml_eval = MLInferenceEngine.evaluate_event(temp_dict)
+        ml_eval = _evaluate_ml_if_enabled(temp_dict)
         ml_evaluations.append(ml_eval)
 
         event_dict = {
@@ -139,7 +150,10 @@ async def ingest_telemetry_batch(
         for alt in alerts:
             asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, alt))
 
-    batch_stats = MLInferenceEngine.generate_batch_statistics(ml_evaluations)
+    if settings.ENABLE_ML_DETECTION:
+        batch_stats = MLInferenceEngine.generate_batch_statistics(ml_evaluations)
+    else:
+        batch_stats = {"status": "ml_disabled"}
 
     return {
         "ingested_count": len(batch_in.events),
@@ -156,7 +170,7 @@ async def ingest_suricata_eve_batch(
     eve_logs: List[Dict[str, Any]] = Body(...),
     db: AsyncSession = Depends(get_db),
     os_client: AsyncOpenSearch = Depends(get_opensearch),
-    current_user: User = Depends(require_roles("admin", "sensor", "system"))
+    current_user: User = Depends(require_roles("super_admin", "tenant_admin", "admin", "sensor", "system"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()
@@ -178,7 +192,7 @@ async def ingest_suricata_eve_batch(
             "severity": parsed["severity"],
             "raw_event": raw_eve
         }
-        ml_eval = MLInferenceEngine.evaluate_event(temp_dict)
+        ml_eval = _evaluate_ml_if_enabled(temp_dict)
         ml_evaluations.append(ml_eval)
 
         event_dict = {
@@ -209,7 +223,10 @@ async def ingest_suricata_eve_batch(
         for alt in alerts:
             asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, alt))
 
-    batch_stats = MLInferenceEngine.generate_batch_statistics(ml_evaluations)
+    if settings.ENABLE_ML_DETECTION:
+        batch_stats = MLInferenceEngine.generate_batch_statistics(ml_evaluations)
+    else:
+        batch_stats = {"status": "ml_disabled"}
 
     return {
         "ingested_count": len(eve_logs),
@@ -225,7 +242,7 @@ async def ingest_suricata_eve_batch(
 async def search_telemetry_events(
     db: AsyncSession = Depends(get_db),
     os_client: AsyncOpenSearch = Depends(get_opensearch),
-    current_user: User = Depends(require_roles("admin", "analyst"))
+    current_user: User = Depends(require_roles("super_admin", "tenant_admin", "admin", "analyst"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()

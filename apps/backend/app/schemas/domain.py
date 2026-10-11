@@ -1,110 +1,84 @@
 from datetime import datetime
-from typing import Optional, Any, Dict, List
+from typing import Optional, Dict, Any
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
-# --- Tenant Schemas ---
-class TenantBase(BaseModel):
-    name: str = Field(..., max_length=100)
-    slug: str = Field(..., max_length=50)
-
-
-class TenantCreate(TenantBase):
-    pass
-
-
-class TenantRead(TenantBase):
-    id: UUID
-    status: str = "active"
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# --- User Schemas ---
 class UserBase(BaseModel):
     email: EmailStr
-    role: str = Field(default="analyst")
+    role: str = Field(default="analyst", description="Roles válidos: super_admin, tenant_admin, admin, analyst, sensor, system")
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
+    password: str
 
 
 class UserRead(UserBase):
     id: UUID
     tenant_id: UUID
-    status: str = "active"
-    created_at: datetime
+    is_active: bool = True
+    created_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
-# --- Auth Schemas ---
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 class TokenRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    tenant_id: UUID
 
 
-# --- Sensor Schemas ---
+class TokenData(BaseModel):
+    user_id: Optional[str] = None
+    tenant_id: Optional[str] = None
+    role: Optional[str] = None
+
+
 class SensorBase(BaseModel):
-    hostname: str = Field(..., max_length=100)
-    profile: str = Field(default="endpoint")
+    name: Optional[str] = "srv-app-01"
+    hostname: Optional[str] = None
+    sensor_type: str = Field(default="network")
+    ip_address: Optional[str] = None
 
 
 class SensorCreate(SensorBase):
     pass
 
 
-class SensorRead(SensorBase):
-    id: UUID
-    tenant_id: UUID
-    lifecycle_status: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class SensorEnrollRequest(BaseModel):
+class SensorEnroll(BaseModel):
     hostname: str
-    profile: str
+    profile: Optional[str] = "endpoint"
     enrollment_key: str
 
 
-class SensorEnrollResponse(BaseModel):
-    sensor_id: UUID
-    tenant_id: UUID
-    hostname: str
-    api_key: str
-    status: str
-
-
-# --- Audit Log Schemas ---
-class AuditLogRead(BaseModel):
+class SensorRead(SensorBase):
     id: UUID
     tenant_id: UUID
-    actor_type: str
-    actor_id: str
-    action: str
-    resource: str
-    details: Dict[str, Any]
-    created_at: datetime
+    name: str
+    sensor_type: str
+    ip_address: Optional[str] = None
+    status: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
-# --- Telemetry Schemas ---
 class TelemetryCreate(BaseModel):
     sensor_id: Optional[UUID] = None
-    event_type: str
-    severity: str = "info"
+    event_type: str = Field(..., example="alert")
+    severity: str = Field(..., example="high")
     source_ip: Optional[str] = None
     destination_ip: Optional[str] = None
     raw_event: Dict[str, Any] = Field(default_factory=dict)

@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     POSTGRES_USER: str = "alma_dev"
     POSTGRES_PASSWORD: str = ""
+    POSTGRES_APP_USER: str = "alma_app"
+    POSTGRES_APP_PASSWORD: str = ""
     POSTGRES_HOST: str = "127.0.0.1"
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "alma_cloud"
@@ -19,12 +21,37 @@ class Settings(BaseSettings):
     OPENSEARCH_USER: str = "admin"
     OPENSEARCH_PASSWORD: str = ""
 
+    JWT_ALGORITHM: str = "RS256"
+    JWT_PRIVATE_KEY_PATH: str = "secrets/jwt_private.pem"
+    JWT_PUBLIC_KEY_PATH: str = "secrets/jwt_public.pem"
+    JWT_ISSUER: str = "alma-cloud"
+    JWT_AUDIENCE: str = "alma-api"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    ENABLE_ML_DETECTION: bool = False
+
     @property
     def DATABASE_URL(self) -> str:
-        app_user = os.getenv("POSTGRES_APP_USER", "alma_app")
-        app_pass = os.getenv("POSTGRES_APP_PASSWORD", self.POSTGRES_PASSWORD)
+        user = self.POSTGRES_APP_USER or os.getenv("POSTGRES_APP_USER") or "alma_app"
+        password = self.POSTGRES_APP_PASSWORD or os.getenv("POSTGRES_APP_PASSWORD")
+
+        if not password:
+            app_secret = Path("secrets/postgres_app_password")
+            if app_secret.is_file() and app_secret.read_text().strip():
+                password = app_secret.read_text().strip()
+            elif self.POSTGRES_PASSWORD:
+                password = self.POSTGRES_PASSWORD
+                user = self.POSTGRES_USER or "alma_dev"
+            else:
+                pg_secret = Path("secrets/postgres_password")
+                if pg_secret.is_file() and pg_secret.read_text().strip():
+                    password = pg_secret.read_text().strip()
+                    user = self.POSTGRES_USER or "alma_dev"
+                else:
+                    password = ""
+
         return (
-            f"postgresql+asyncpg://{app_user}:{app_pass}"
+            f"postgresql+asyncpg://{user}:{password}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 

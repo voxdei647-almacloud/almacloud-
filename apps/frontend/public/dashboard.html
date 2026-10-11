@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOX DEI | SOC Operations Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #0a0d14; }
+        .card-bg { background-color: #121824; border: 1px solid #1e293b; }
+    </style>
+</head>
+<body class="h-full font-sans text-slate-100 flex flex-col">
+
+    <!-- Top Bar Navigation -->
+    <header class="h-16 border-b border-slate-800 bg-[#0f141d] px-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <i data-lucide="shield-alert" class="w-7 h-7 text-blue-500"></i>
+            <span class="font-black text-xl tracking-wider text-blue-400">VOX DEI <span class="text-slate-100">SOC</span></span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-xs px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                🟢 System Active
+            </span>
+            <button onclick="logout()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700">
+                Cerrar Sesión
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-6 space-y-6 overflow-y-auto">
+        <!-- Top Metrics Row -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="card-bg p-4 rounded-xl flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-slate-400 font-semibold">Total Eventos Ingestados</p>
+                    <h3 class="text-2xl font-bold mt-1" id="stat-total-events">0</h3>
+                </div>
+                <div class="p-3 bg-blue-500/10 text-blue-400 rounded-lg"><i data-lucide="activity" class="w-6 h-6"></i></div>
+            </div>
+
+            <div class="card-bg p-4 rounded-xl flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-slate-400 font-semibold">Alertas Críticas</p>
+                    <h3 class="text-2xl font-bold mt-1 text-red-500" id="stat-critical-alerts">0</h3>
+                </div>
+                <div class="p-3 bg-red-500/10 text-red-400 rounded-lg"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
+            </div>
+
+            <div class="card-bg p-4 rounded-xl flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-slate-400 font-semibold">Sensores Activos</p>
+                    <h3 class="text-2xl font-bold mt-1 text-emerald-400" id="stat-active-sensors">0</h3>
+                </div>
+                <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg"><i data-lucide="cpu" class="w-6 h-6"></i></div>
+            </div>
+
+            <div class="card-bg p-4 rounded-xl flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-slate-400 font-semibold">Aislamiento Multitenant</p>
+                    <h3 class="text-xs font-bold mt-2 text-blue-300" id="stat-tenant-id">RLS Verified</h3>
+                </div>
+                <div class="p-3 bg-purple-500/10 text-purple-400 rounded-lg"><i data-lucide="lock" class="w-6 h-6"></i></div>
+            </div>
+        </div>
+
+        <!-- Charts & Telemetry Feed Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Alert Distribution Chart -->
+            <div class="card-bg p-5 rounded-xl">
+                <h4 class="text-sm font-bold text-slate-200 mb-4">Distribución de Severidad de Alertas</h4>
+                <div class="h-64 flex items-center justify-center">
+                    <canvas id="severityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Live Events Table -->
+            <div class="card-bg p-5 rounded-xl lg:col-span-2 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-bold text-slate-200">Feed de Telemetría NIDS Suricata en Tiempo Real</h4>
+                    <button onclick="fetchEvents()" class="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Actualizar
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto flex-1">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900/80 text-slate-400 uppercase text-[10px]">
+                            <tr>
+                                <th class="p-2.5">Tipo Evento</th>
+                                <th class="p-2.5">Severidad</th>
+                                <th class="p-2.5">IP Origen</th>
+                                <th class="p-2.5">IP Destino</th>
+                                <th class="p-2.5">Marca de Tiempo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-table-body" class="divide-y divide-slate-800">
+                            <tr><td colspan="5" class="p-4 text-center text-slate-500">Cargando eventos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/ui/js/dashboard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initDashboard();
+        });
+    </script>
+</body>
+</html>

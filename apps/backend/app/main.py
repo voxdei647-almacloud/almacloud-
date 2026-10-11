@@ -1,30 +1,20 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+import os
+
 from app.api.v1.sensors import router as sensors_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.telemetry import router as telemetry_router
 from app.api.v1.auth import router as auth_router
-from app.core.valkey import init_valkey, close_valkey
-from app.core.opensearch import init_opensearch, close_opensearch
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_valkey()
-    await init_opensearch()
-    yield
-    await close_opensearch()
-    await close_valkey()
-
 
 app = FastAPI(
-    title="ALMA CLOUD Control Plane API",
-    version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan
+    title="ALMA Cloud API",
+    version="1.0.0",
+    description="Backend de Ciberseguridad Multitenant y Telemetría SOC (VOX DEI)"
 )
 
+# Rutas de API v1
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(sensors_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
@@ -32,9 +22,19 @@ app.include_router(telemetry_router, prefix="/api/v1")
 
 
 @app.get("/healthz", tags=["Health"])
-async def health_check():
-    return {
-        "status": "healthy",
-        "service": "alma-backend",
-        "version": "0.1.0"
-    }
+async def healthz():
+    return {"status": "healthy", "service": "ALMA Cloud API"}
+
+
+# Montar interfaz de usuario estática en /ui
+static_dir = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../frontend/public")
+)
+
+if os.path.exists(static_dir):
+    app.mount("/ui", StaticFiles(directory=static_dir, html=True), name="ui")
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/ui/index.html")

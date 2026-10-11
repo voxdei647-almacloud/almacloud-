@@ -1,4 +1,6 @@
 import logging
+import os
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from uuid import UUID
@@ -11,10 +13,12 @@ from app.models.domain import User
 from app.schemas.domain import TelemetryCreate, TelemetryRead, TelemetryBatchCreate
 from app.services.suricata_parser import parse_eve_event
 from app.services.alert_engine import AlertRuleEngine
+from app.services.webhook_dispatcher import WebhookDispatcher
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
 INDEX_NAME = "alma-telemetry-v1"
+WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL")
 
 
 @router.post("/events", status_code=status.HTTP_201_CREATED)
@@ -46,6 +50,9 @@ async def ingest_telemetry_event(
 
     response = await os_client.index(index=INDEX_NAME, body=doc, refresh=True)
     generated_alert = AlertRuleEngine.evaluate_event(tenant_id_str, doc)
+
+    if generated_alert and WEBHOOK_URL:
+        asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, generated_alert))
 
     return {
         "id": response["_id"],
@@ -97,6 +104,10 @@ async def ingest_telemetry_batch(
     bulk_response = await os_client.bulk(body=bulk_body, refresh=True)
     alerts = AlertRuleEngine.process_batch(tenant_id_str, events_for_alerts)
 
+    if WEBHOOK_URL:
+        for alt in alerts:
+            asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, alt))
+
     return {
         "ingested_count": len(batch_in.events),
         "alerts_generated": len(alerts),
@@ -146,6 +157,10 @@ async def ingest_suricata_eve_batch(
 
     bulk_response = await os_client.bulk(body=bulk_body, refresh=True)
     alerts = AlertRuleEngine.process_batch(tenant_id_str, events_for_alerts)
+
+    if WEBHOOK_URL:
+        for alt in alerts:
+            asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, alt))
 
     return {
         "ingested_count": len(eve_logs),

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOX DEI | Plataforma de Inteligencia y Seguridad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        vox: {
+                            blue: '#1a5b8e',
+                            'blue-light': '#2c7be5',
+                            'blue-dark': '#0f3a5d',
+                            carbon: '#0a0d14',
+                            'carbon-card': '#121824',
+                            'carbon-border': '#1e293b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .bg-carbon-pattern {
+            background-color: #0a0d14;
+            background-image: radial-gradient(rgba(26, 91, 142, 0.18) 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+        .text-gradient-vox {
+            background: linear-gradient(135deg, #2c7be5 0%, #1a5b8e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .bg-glow-dark {
+            background: radial-gradient(circle at 50% 30%, rgba(26, 91, 142, 0.35) 0%, rgba(10, 13, 20, 0.95) 70%);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans bg-white dark:bg-vox-carbon text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 z-50 flex items-center gap-3 bg-slate-900 border border-slate-800 text-white px-5 py-4 rounded-xl shadow-2xl opacity-0 pointer-events-none transition-all duration-300 transform translate-y-[-10px]">
+        <div class="p-2 bg-blue-500/20 text-blue-400 rounded-lg">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <p class="font-semibold text-sm" id="toast-title">Notificación</p>
+            <p class="text-xs text-slate-400" id="toast-message">Mensaje</p>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="flex-1 flex flex-col lg:flex-row min-h-0 w-full">
+        <!-- LEFT PANEL -->
+        <div class="w-full lg:w-[48%] flex flex-col justify-between p-6 sm:p-10 border-r border-slate-200 dark:border-vox-carbon-border bg-white dark:bg-vox-carbon">
+            <div>
+                <!-- Brand Header -->
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 flex items-center justify-center shrink-0">
+                            <i data-lucide="shield-alert" class="w-8 h-8 text-blue-500"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-gradient-vox font-black text-xl tracking-wider">VOX DEI</span>
+                            <span class="text-[9px] font-semibold text-slate-400 uppercase">Intelligence & Security</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex bg-slate-100 dark:bg-vox-carbon-card p-1 rounded-xl mb-6 border border-slate-200 dark:border-vox-carbon-border">
+                    <button id="tab-login" onclick="switchTab('login')" class="flex-1 py-2.5 text-xs font-bold rounded-lg text-slate-600 dark:text-slate-400">
+                        Iniciar Sesión
+                    </button>
+                    <button id="tab-signup" onclick="switchTab('signup')" class="flex-1 py-2.5 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-md">
+                        Crear Cuenta
+                    </button>
+                </div>
+
+                <div class="mb-6">
+                    <h1 id="form-heading" class="text-2xl font-extrabold text-slate-900 dark:text-white">Crear Cuenta Gratuita</h1>
+                    <p id="form-subheading" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Acceda a la consola de inteligencia ALMA SOC.</p>
+                </div>
+
+                <!-- Auth Form -->
+                <form id="vox-auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                    <div id="field-name-group" class="space-y-1.5">
+                        <label for="fullName" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Nombre Completo</label>
+                        <input type="text" id="fullName" placeholder="Ej. Carlos Mendoza" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-vox-carbon-card border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="email" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Correo Corporativo</label>
+                        <input type="email" id="email" required placeholder="usuario@empresa.com" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-vox-carbon-card border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="password" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Contraseña</label>
+                        <input type="password" id="password" required placeholder="••••••••••••" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-vox-carbon-card border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+
+                    <div class="pt-2">
+                        <button type="submit" id="btn-submit" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg shadow-lg cursor-pointer transition-all">
+                            <span id="btn-submit-text">Comenzar Prueba Gratuita</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="w-full lg:w-[52%] bg-glow-dark dark:bg-carbon-pattern flex flex-col justify-center items-center p-8 text-center">
+            <div class="max-w-xl space-y-4">
+                <span class="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">VOX DEI / ALMA SOC</span>
+                <h2 class="text-3xl font-black text-white">Potencia tu Ciberseguridad en Tiempo Real</h2>
+                <p class="text-slate-400 text-sm">Monitoreo NIDS Suricata, Detección de Amenazas y Telemetría Centralizada.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/ui/js/auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+
+        function switchTab(mode) {
+            const isSignUp = (mode === 'signup');
+            const tabLogin = document.getElementById('tab-login');
+            const tabSignup = document.getElementById('tab-signup');
+            const heading = document.getElementById('form-heading');
+            const fieldName = document.getElementById('field-name-group');
+            const submitBtnText = document.getElementById('btn-submit-text');
+
+            if (isSignUp) {
+                tabSignup.className = "flex-1 py-2.5 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-md";
+                tabLogin.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-slate-600 dark:text-slate-400";
+                heading.textContent = 'Crear Cuenta Gratuita';
+                fieldName.classList.remove('hidden');
+                submitBtnText.textContent = 'Comenzar Prueba Gratuita';
+            } else {
+                tabLogin.className = "flex-1 py-2.5 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-md";
+                tabSignup.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-slate-600 dark:text-slate-400";
+                heading.textContent = 'Iniciar Sesión en VOX DEI';
+                fieldName.classList.add('hidden');
+                submitBtnText.textContent = 'Iniciar Sesión';
+            }
+        }
+
+        function showToast(title, message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-title').textContent = title;
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 3000);
+        }
+    </script>
+</body>
+</html>

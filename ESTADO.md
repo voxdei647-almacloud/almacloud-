@@ -1,6 +1,6 @@
 # ESTADO DEL PROYECTO — ALMA CLOUD
 
-> **Última actualización:** Validación E2E de Auditoría Inmutable y Aislamiento RLS en API.
+> **Última actualización:** Integración de Caché Valkey Async y Estado de Sensores en Tiempo Real.
 
 ## 1. Infraestructura Base (Incremento 0)
 - **PostgreSQL 16**, **Valkey 8** y **OpenSearch 2.19.6** operativos en Docker Compose.
@@ -13,10 +13,9 @@
 
 ## 3. Capa de Servicios Backend (FastAPI / Python)
 - **Capa de Datos:** SQLAlchemy 2.0 Async + AsyncPG bajo el rol `alma_app` y tipos nativos (`PG_UUID`, `JSONB`, `INET`).
-- **Inyección RLS:** Contexto de sesión inyectado mediante encabezado HTTP `X-Tenant-ID` (`deps.py`).
+- **Capa de Cache:** Valkey Async (`redis-py`) con gestión de claves con espacio de nombres (`tenant:<id>:sensor:<id>:heartbeat`) y TTL de 5 min (`PASS VK1-VK3`).
 - **Pruebas API v1:** Endpoints `/api/v1/sensors` y `/api/v1/audit-logs` con trazabilidad automática y aislamiento RLS verificado (`PASS API1-API5`).
 
 ## 4. Próximos Pasos
-- Cliente asíncrono e inyección de caché para **Valkey** (`redis-py` async / `valkey-py`).
-- Cliente asíncrono para **OpenSearch** (procesamiento de eventos NIDS/EDR).
+- Cliente asíncrono para **OpenSearch** (procesamiento y consulta de eventos NIDS/EDR).
 - Módulo de Autenticación y firmado de Tokens JWT por Tenant.

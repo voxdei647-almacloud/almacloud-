@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alma_postgres_prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alma_db}
+      POSTGRES_USER: ${POSTGRES_USER:-alma_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alma_secure_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alma_user} -d ${POSTGRES_DB:-alma_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: alma_valkey_prod
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.6
+    container_name: alma_opensearch_prod
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch_data_prod:/usr/share/opensearch/data
+    restart: always
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: alma_backend_prod
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-alma_user}:${POSTGRES_PASSWORD:-alma_secure_password}@postgres:5432/${POSTGRES_DB:-alma_db}
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: always
+
+  proxy:
+    image: nginx:alpine
+    container_name: alma_nginx_prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./apps/proxy/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  pgdata_prod:
+  opensearch_data_prod:

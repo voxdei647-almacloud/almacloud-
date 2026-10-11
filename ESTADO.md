@@ -25,3 +25,11 @@
 
 ## 5. Próximos Pasos
 - Despliegue en GCP (Google Cloud Platform) con máquina `e2-standard-2` o clúster de producción con Nginx / TLS.
+
+## [2026-10-11] - Estabilización de Capa de Datos y Ejecución Exitosa E2E (100%)
+
+### Cambios y Correcciones Realizados:
+1. **Autenticación PostgreSQL**: Sincronizado el rol `alma_app` con la contraseña de entorno `POSTGRES_APP_PASSWORD`. Se ejecutaron e inspeccionaron las migraciones SQL iniciales (`001_roles.sql` a `0003_audit_logs.sql`).
+2. **OpenSearch Telemetría**: Cargada la plantilla `0001_telemetry_template.json` con `tenant_id` como tipo `keyword` nativo. Se ajustó el filtro en `apps/backend/app/api/v1/telemetry.py` para consultar directamente sobre el campo.
+3. **Nginx Proxy**: Actualizada la configuración en `apps/proxy/conf.d/default.conf` con el resolver interno de Docker (`127.0.0.11`) para enrutar `/api` al backend y `/` al frontend.
+4. **Validación E2E**: Cobertura del 100% aprobada en las 12 suites de pruebas integrales (`scripts/run_all_tests.sh`), incluyendo API Base, RLS, Valkey, OpenSearch, JWT, RBAC, Enrolamiento, Ingesta Bulk/EVE JSON, Motor de Alertas, Interfaz Web e Inferencia ML (IsolationForest).

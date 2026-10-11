@@ -60,12 +60,15 @@ ingest_res=$(curl -s -X POST http://127.0.0.1:8000/api/v1/telemetry/events \
 
 if echo "$ingest_res" | grep -q '"status":"indexed"'; then
   echo "PASS OS1: Evento de telemetría indexado correctamente en OpenSearch"
+curl -s -X POST "http://127.0.0.1:9200/_refresh" > /dev/null
+sleep 1
 else
   echo "FAIL OS1: Error indexando telemetría: $ingest_res"
   exit 1
 fi
 
 echo "=== 3. Consultar telemetría de Tenant A ==="
+sleep 2
 events_a=$(curl -s -H "Authorization: Bearer $TOKEN_A" http://127.0.0.1:8000/api/v1/telemetry/events)
 
 if echo "$events_a" | grep -q "suricata.alert"; then

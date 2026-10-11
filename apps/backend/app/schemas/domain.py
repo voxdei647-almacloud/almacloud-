@@ -98,3 +98,15 @@ class TokenRead(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class SensorEnrollRequest(BaseModel):
+    hostname: str
+    profile: str
+    enrollment_key: str
+
+class SensorEnrollResponse(BaseModel):
+    sensor_id: UUID
+    tenant_id: UUID
+    hostname: str
+    api_key: str
+    status: str

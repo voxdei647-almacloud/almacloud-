@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
@@ -6,10 +7,65 @@ import redis.asyncio as redis
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_valkey, require_roles
+from app.core.config import settings
 from app.models.domain import Sensor, AuditLog, User
-from app.schemas.domain import SensorCreate, SensorRead
+from app.schemas.domain import SensorCreate, SensorRead, SensorEnrollRequest, SensorEnrollResponse
 
 router = APIRouter(prefix="/sensors", tags=["Sensors"])
+
+
+@router.post("/enrollment", response_model=SensorEnrollResponse, status_code=status.HTTP_201_CREATED)
+async def enroll_sensor(
+    enroll_in: SensorEnrollRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
+    tenant_id_str = res.scalar()
+    if not tenant_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contexto de tenant no configurado."
+        )
+
+    expected_key = getattr(settings, "ENROLLMENT_KEY", "alma-secret-enroll-key-2026")
+    if enroll_in.enrollment_key != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Clave de enrolamiento inválida."
+        )
+
+    tenant_uuid = UUID(tenant_id_str)
+    generated_api_key = f"ak_{secrets.token_hex(24)}"
+
+    sensor = Sensor(
+        tenant_id=tenant_uuid,
+        hostname=enroll_in.hostname,
+        profile=enroll_in.profile,
+        lifecycle_status="active"
+    )
+    db.add(sensor)
+    await db.flush()
+
+    audit_entry = AuditLog(
+        tenant_id=tenant_uuid,
+        actor_type="sensor",
+        actor_id=str(sensor.id),
+        action="sensor.enrolled",
+        resource=f"sensor:{sensor.id}",
+        details={"hostname": sensor.hostname, "profile": sensor.profile}
+    )
+    db.add(audit_entry)
+
+    await db.commit()
+    await db.refresh(sensor)
+
+    return SensorEnrollResponse(
+        sensor_id=sensor.id,
+        tenant_id=tenant_uuid,
+        hostname=sensor.hostname,
+        api_key=generated_api_key,
+        status=sensor.lifecycle_status
+    )
 
 
 @router.get("", response_model=List[SensorRead])

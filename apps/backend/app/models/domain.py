@@ -35,7 +35,7 @@ class Sensor(Base):
     )
     hostname: Mapped[str] = mapped_column(String(255), nullable=False)
     profile: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), server_default="pending", nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(32), server_default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )

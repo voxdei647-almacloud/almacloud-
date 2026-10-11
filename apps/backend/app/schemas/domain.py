@@ -21,7 +21,7 @@ class TenantRead(TenantBase):
 
 
 class SensorBase(BaseModel):
-    hostname: str = Field(..., max_length=255)
+    hostname: str = Field(..., max_length=253)
     profile: str = Field(..., max_length=64)
 
 
@@ -32,7 +32,7 @@ class SensorCreate(SensorBase):
 class SensorRead(SensorBase):
     id: UUID
     tenant_id: UUID
-    status: str
+    lifecycle_status: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

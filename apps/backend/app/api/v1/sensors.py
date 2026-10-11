@@ -33,7 +33,7 @@ async def create_sensor(
         tenant_id=UUID(tenant_id_str),
         hostname=sensor_in.hostname,
         profile=sensor_in.profile,
-        status="pending"
+        lifecycle_status="active"
     )
     db.add(sensor)
     await db.commit()

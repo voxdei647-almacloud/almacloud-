@@ -2,7 +2,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_user
 from app.core.security import hash_password, verify_password, create_access_token
 from app.models.domain import User, AuditLog
 from app.schemas.domain import UserCreate, UserRead, LoginRequest, TokenRead
@@ -25,7 +25,6 @@ async def register_user(
 
     tenant_uuid = UUID(tenant_id_str)
 
-    # Validar unicidad del correo por tenant
     existing = await db.execute(select(User).where(User.email == user_in.email))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -93,3 +92,8 @@ async def login(
         token_type="bearer",
         tenant_id=tenant_uuid
     )
+
+
+@router.get("/me", response_model=UserRead)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user

@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from opensearchpy import AsyncOpenSearch
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_db, get_opensearch
+from app.api.deps import get_db, get_opensearch, require_roles
+from app.models.domain import User
 from app.schemas.domain import TelemetryCreate, TelemetryRead
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,8 @@ INDEX_NAME = "alma-telemetry-v1"
 async def ingest_telemetry_event(
     event_in: TelemetryCreate,
     db: AsyncSession = Depends(get_db),
-    os_client: AsyncOpenSearch = Depends(get_opensearch)
+    os_client: AsyncOpenSearch = Depends(get_opensearch),
+    current_user: User = Depends(require_roles("admin", "sensor", "system"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()
@@ -52,7 +54,8 @@ async def ingest_telemetry_event(
 @router.get("/events", response_model=List[TelemetryRead])
 async def search_telemetry_events(
     db: AsyncSession = Depends(get_db),
-    os_client: AsyncOpenSearch = Depends(get_opensearch)
+    os_client: AsyncOpenSearch = Depends(get_opensearch),
+    current_user: User = Depends(require_roles("admin", "analyst"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()

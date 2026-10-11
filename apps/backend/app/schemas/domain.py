@@ -50,3 +50,24 @@ class AuditLogRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TelemetryCreate(BaseModel):
+    event_type: str = Field(..., max_length=64)
+    severity: str = Field("info", max_length=16)
+    source_ip: Optional[str] = None
+    destination_ip: Optional[str] = None
+    sensor_id: Optional[UUID] = None
+    raw_event: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TelemetryRead(BaseModel):
+    id: str
+    tenant_id: UUID
+    sensor_id: Optional[UUID] = None
+    event_type: str
+    severity: str
+    source_ip: Optional[str] = None
+    destination_ip: Optional[str] = None
+    raw_event: Dict[str, Any]
+    timestamp: datetime

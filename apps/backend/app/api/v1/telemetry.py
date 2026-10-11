@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_opensearch, require_roles
 from app.models.domain import User
-from app.schemas.domain import TelemetryCreate, TelemetryRead
+from app.schemas.domain import TelemetryCreate, TelemetryRead, TelemetryBatchCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
@@ -47,6 +47,51 @@ async def ingest_telemetry_event(
         "id": response["_id"],
         "status": "indexed",
         "tenant_id": tenant_id_str,
+        "timestamp": now_iso
+    }
+
+
+@router.post("/events/batch", status_code=status.HTTP_201_CREATED)
+async def ingest_telemetry_batch(
+    batch_in: TelemetryBatchCreate,
+    db: AsyncSession = Depends(get_db),
+    os_client: AsyncOpenSearch = Depends(get_opensearch),
+    current_user: User = Depends(require_roles("admin", "sensor", "system"))
+):
+    res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
+    tenant_id_str = res.scalar()
+    if not tenant_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contexto de tenant no configurado."
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    bulk_body = []
+
+    for item in batch_in.events:
+        bulk_body.append({"index": {"_index": INDEX_NAME}})
+        bulk_body.append({
+            "tenant_id": tenant_id_str,
+            "sensor_id": str(item.sensor_id) if item.sensor_id else None,
+            "event_type": item.event_type,
+            "severity": item.severity,
+            "source_ip": item.source_ip,
+            "destination_ip": item.destination_ip,
+            "raw_event": item.raw_event,
+            "timestamp": now_iso
+        })
+
+    if not bulk_body:
+        return {"ingested_count": 0, "status": "empty_batch"}
+
+    bulk_response = await os_client.bulk(body=bulk_body, refresh=True)
+    items_processed = len(batch_in.events)
+
+    return {
+        "ingested_count": items_processed,
+        "errors": bulk_response.get("errors", False),
+        "status": "processed",
         "timestamp": now_iso
     }
 

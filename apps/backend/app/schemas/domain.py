@@ -1,12 +1,13 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional, Any, Dict, List
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+# --- Tenant Schemas ---
 class TenantBase(BaseModel):
-    slug: str = Field(..., max_length=64)
-    name: str = Field(..., max_length=128)
+    name: str = Field(..., max_length=100)
+    slug: str = Field(..., max_length=50)
 
 
 class TenantCreate(TenantBase):
@@ -15,14 +16,47 @@ class TenantCreate(TenantBase):
 
 class TenantRead(TenantBase):
     id: UUID
+    status: str = "active"
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- User Schemas ---
+class UserBase(BaseModel):
+    email: EmailStr
+    role: str = Field(default="analyst")
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=8)
+
+
+class UserRead(UserBase):
+    id: UUID
+    tenant_id: UUID
+    status: str = "active"
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Auth Schemas ---
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenRead(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    tenant_id: UUID
+
+
+# --- Sensor Schemas ---
 class SensorBase(BaseModel):
-    hostname: str = Field(..., max_length=253)
-    profile: str = Field(..., max_length=64)
+    hostname: str = Field(..., max_length=100)
+    profile: str = Field(default="endpoint")
 
 
 class SensorCreate(SensorBase):
@@ -38,6 +72,21 @@ class SensorRead(SensorBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SensorEnrollRequest(BaseModel):
+    hostname: str
+    profile: str
+    enrollment_key: str
+
+
+class SensorEnrollResponse(BaseModel):
+    sensor_id: UUID
+    tenant_id: UUID
+    hostname: str
+    api_key: str
+    status: str
+
+
+# --- Audit Log Schemas ---
 class AuditLogRead(BaseModel):
     id: UUID
     tenant_id: UUID
@@ -46,19 +95,23 @@ class AuditLogRead(BaseModel):
     action: str
     resource: str
     details: Dict[str, Any]
-    ip_address: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- Telemetry Schemas ---
 class TelemetryCreate(BaseModel):
-    event_type: str = Field(..., max_length=64)
-    severity: str = Field("info", max_length=16)
+    sensor_id: Optional[UUID] = None
+    event_type: str
+    severity: str = "info"
     source_ip: Optional[str] = None
     destination_ip: Optional[str] = None
-    sensor_id: Optional[UUID] = None
     raw_event: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TelemetryBatchCreate(BaseModel):
+    events: list[TelemetryCreate]
 
 
 class TelemetryRead(BaseModel):
@@ -70,43 +123,4 @@ class TelemetryRead(BaseModel):
     source_ip: Optional[str] = None
     destination_ip: Optional[str] = None
     raw_event: Dict[str, Any]
-    timestamp: datetime
-
-
-class UserCreate(BaseModel):
-    email: str = Field(..., max_length=255)
-    password: str = Field(..., min_length=8)
-    role: str = Field("analyst", max_length=32)
-
-
-class UserRead(BaseModel):
-    id: UUID
-    tenant_id: UUID
-    email: str
-    role: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class TokenRead(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    tenant_id: UUID
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-class SensorEnrollRequest(BaseModel):
-    hostname: str
-    profile: str
-    enrollment_key: str
-
-class SensorEnrollResponse(BaseModel):
-    sensor_id: UUID
-    tenant_id: UUID
-    hostname: str
-    api_key: str
-    status: str
+    timestamp: str

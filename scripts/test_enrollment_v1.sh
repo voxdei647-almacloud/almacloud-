@@ -19,10 +19,12 @@ UVICORN_PID=$!
 cleanup() {
   echo "Deteniendo Uvicorn (PID $UVICORN_PID)..."
   kill $UVICORN_PID 2>/dev/null || true
+  wait $UVICORN_PID 2>/dev/null || true
+  sleep 1
 }
 trap cleanup EXIT
 
-for i in {1..10}; do
+for i in {1..15}; do
   if curl -s http://127.0.0.1:8000/healthz | grep -q "healthy"; then
     break
   fi

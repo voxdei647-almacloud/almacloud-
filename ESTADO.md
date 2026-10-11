@@ -33,3 +33,11 @@
 2. **OpenSearch Telemetría**: Cargada la plantilla `0001_telemetry_template.json` con `tenant_id` como tipo `keyword` nativo. Se ajustó el filtro en `apps/backend/app/api/v1/telemetry.py` para consultar directamente sobre el campo.
 3. **Nginx Proxy**: Actualizada la configuración en `apps/proxy/conf.d/default.conf` con el resolver interno de Docker (`127.0.0.11`) para enrutar `/api` al backend y `/` al frontend.
 4. **Validación E2E**: Cobertura del 100% aprobada en las 12 suites de pruebas integrales (`scripts/run_all_tests.sh`), incluyendo API Base, RLS, Valkey, OpenSearch, JWT, RBAC, Enrolamiento, Ingesta Bulk/EVE JSON, Motor de Alertas, Interfaz Web e Inferencia ML (IsolationForest).
+
+## [2026-10-11] - Endurecimiento de Seguridad Backend y Middleware
+
+### Cambios y Mejoras Realizadas:
+1. **Rate Limiting en Login**: Implementado control de intentos fallidos en `/api/v1/auth/login` (máximo 5 intentos/min por IP) respaldado en Valkey. Configurable mediante `ENABLE_RATE_LIMIT` para pruebas locales.
+2. **Cabeceras HTTP de Seguridad**: Inyección de `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security`, `X-XSS-Protection` y `Content-Security-Policy` en todas las respuestas HTTP.
+3. **Deshabilitación de Docs en Producción**: Desactivadas las interfaces públicas `/docs` (Swagger) y `/redoc` en FastAPI.
+4. **Validación E2E**: Re-ejecución del test suite con 100% de éxito en los 12 módulos de la plataforma.

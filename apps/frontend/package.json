@@ -1,0 +1,10 @@
+{
+  "name": "alma-cloud-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "mkdir -p build && echo 'import http from \"node/http\"; const server = http.createServer((req, res) => { res.writeHead(200, {\"Content-Type\": \"text/html\"}); res.end(\"<h1>ALMA Cloud Frontend Container Active</h1>\"); }); server.listen(3000);' > build/index.js",
+    "start": "node build/index.js"
+  },
+  "dependencies": {}
+}

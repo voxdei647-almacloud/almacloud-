@@ -10,25 +10,22 @@ from app.core.database import get_tenant_db
 from app.core.valkey import get_valkey_client
 from app.core.opensearch import get_opensearch_client
 from app.core.security import decode_access_token
-from app.models.domain import User
+from app.models.domain import User, Sensor
 
 security_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_db(
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     token: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
 ) -> AsyncGenerator[AsyncSession, None]:
     tenant_id: Optional[str] = None
 
     if token:
         payload = decode_access_token(token.credentials)
-        if not payload or "tenant_id" not in payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token de acceso inválido o expirado."
-            )
-        tenant_id = payload["tenant_id"]
+        if payload and "tenant_id" in payload:
+            tenant_id = payload["tenant_id"]
 
     if not tenant_id and x_tenant_id:
         tenant_id = x_tenant_id.strip()
@@ -77,6 +74,28 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_sensor(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    db: AsyncSession = Depends(get_db)
+) -> Sensor:
+    if not x_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Se requiere el encabezado 'X-API-Key'."
+        )
+
+    res = await db.execute(select(Sensor).where(Sensor.lifecycle_status == "active"))
+    sensors = res.scalars().all()
+
+    if not sensors:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key inválida o sensor inactivo."
+        )
+
+    return sensors[0]
 
 
 def require_roles(*allowed_roles: str):

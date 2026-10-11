@@ -1,13 +1,23 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.v1.sensors import router as sensors_router
 from app.api.v1.audit import router as audit_router
-from app.core.config import settings
+from app.core.valkey import init_valkey, close_valkey
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_valkey()
+    yield
+    await close_valkey()
+
 
 app = FastAPI(
     title="ALMA CLOUD Control Plane API",
     version="0.1.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 app.include_router(sensors_router, prefix="/api/v1")

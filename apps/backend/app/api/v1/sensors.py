@@ -1,9 +1,11 @@
+from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
+import redis.asyncio as redis
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_db
+from app.api.deps import get_db, get_valkey
 from app.models.domain import Sensor, AuditLog
 from app.schemas.domain import SensorCreate, SensorRead
 
@@ -57,3 +59,75 @@ async def create_sensor(
     await db.commit()
     await db.refresh(sensor)
     return sensor
+
+
+@router.post("/{sensor_id}/heartbeat", status_code=status.HTTP_200_OK)
+async def register_heartbeat(
+    sensor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    cache: redis.Redis = Depends(get_valkey)
+):
+    res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
+    tenant_id_str = res.scalar()
+
+    sensor_res = await db.execute(select(Sensor).where(Sensor.id == sensor_id))
+    sensor = sensor_res.scalar_one_or_none()
+
+    if not sensor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sensor no encontrado o fuera de alcance."
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cache_key = f"tenant:{tenant_id_str}:sensor:{sensor_id}:heartbeat"
+
+    await cache.hset(cache_key, mapping={
+        "status": "online",
+        "last_seen": now_iso,
+        "hostname": sensor.hostname
+    })
+    await cache.expire(cache_key, 300)
+
+    return {
+        "status": "online",
+        "sensor_id": str(sensor_id),
+        "last_seen": now_iso
+    }
+
+
+@router.get("/{sensor_id}/status", status_code=status.HTTP_200_OK)
+async def get_sensor_status(
+    sensor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    cache: redis.Redis = Depends(get_valkey)
+):
+    res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
+    tenant_id_str = res.scalar()
+
+    sensor_res = await db.execute(select(Sensor).where(Sensor.id == sensor_id))
+    sensor = sensor_res.scalar_one_or_none()
+
+    if not sensor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sensor no encontrado o fuera de alcance."
+        )
+
+    cache_key = f"tenant:{tenant_id_str}:sensor:{sensor_id}:heartbeat"
+    cache_data = await cache.hgetall(cache_key)
+
+    if not cache_data:
+        return {
+            "sensor_id": str(sensor_id),
+            "hostname": sensor.hostname,
+            "status": "offline",
+            "last_seen": None
+        }
+
+    return {
+        "sensor_id": str(sensor_id),
+        "hostname": sensor.hostname,
+        "status": cache_data.get("status", "unknown"),
+        "last_seen": cache_data.get("last_seen")
+    }

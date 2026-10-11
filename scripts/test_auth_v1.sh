@@ -7,12 +7,14 @@ source .env
 TENANT_A="11111111-1111-1111-1111-111111111111"
 TENANT_B="22222222-2222-2222-2222-222222222222"
 
-echo "=== 0. Sembrando Tenants de prueba ==="
+echo "=== 0. Sembrando Tenants y limpiando usuarios de prueba ==="
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "
 INSERT INTO alma.tenants (id, slug, name) VALUES
   ('$TENANT_A', 'tenant-a-test', 'Tenant Alpha Test'),
   ('$TENANT_B', 'tenant-b-test', 'Tenant Beta Test')
 ON CONFLICT (id) DO NOTHING;
+
+DELETE FROM alma.users WHERE email = 'admin@tenant-a.com';
 " > /dev/null
 
 echo "=== 1. Iniciando FastAPI ==="

@@ -71,3 +71,30 @@ class TelemetryRead(BaseModel):
     destination_ip: Optional[str] = None
     raw_event: Dict[str, Any]
     timestamp: datetime
+
+
+class UserCreate(BaseModel):
+    email: str = Field(..., max_length=255)
+    password: str = Field(..., min_length=8)
+    role: str = Field("analyst", max_length=32)
+
+
+class UserRead(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    email: str
+    role: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenRead(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    tenant_id: UUID
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str

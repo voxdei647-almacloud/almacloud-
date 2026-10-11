@@ -1,0 +1,23 @@
+# Entorno local
+.env
+.env.*
+!.env.example
+
+# Secretos: carpeta dedicada, no patrones genéricos
+secrets/*
+!secrets/.gitkeep
+
+# Claves y certificados sueltos
+*.secret
+*.key
+*.pem
+*.crt
+*.p12
+
+# Docker
+# Se ignora override por convención; revisar si se quiere versionar.
+docker-compose.override.yml
+
+# Sistema
+.DS_Store
+Thumbs.db

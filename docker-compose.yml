@@ -1,0 +1,119 @@
+# ALMA CLOUD - entorno local de desarrollo
+# Solo infraestructura: PostgreSQL, Valkey y OpenSearch.
+# No define backend, tablas, RLS, autenticación ni lógica de negocio.
+
+name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE es obligatorio}
+    container_name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER es obligatorio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatorio}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB es obligatorio}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - alma-dev
+
+  valkey:
+    image: ${VALKEY_IMAGE:?VALKEY_IMAGE es obligatorio}
+    container_name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-valkey
+    restart: unless-stopped
+    # La contraseña NO va en argv.
+    # Se inyecta vía include desde /run/secrets/valkey_auth_conf.
+    # El resto de opciones no sensibles van como argumentos.
+    command:
+      - valkey-server
+      - /usr/local/etc/valkey/valkey.conf
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${VALKEY_MAXMEMORY:-256mb}
+      - --maxmemory-policy
+      - noeviction
+    secrets:
+      - valkey_auth_conf
+      - valkey_password
+    ports:
+      - "127.0.0.1:${VALKEY_PORT:-6379}:6379"
+    volumes:
+      - ./config/valkey.conf:/usr/local/etc/valkey/valkey.conf:ro
+      - valkey_data:/data
+    healthcheck:
+      # PENDIENTE_VERIFICACION: confirmar que valkey-cli acepta REDISCLI_AUTH en esta imagen.
+      # La contraseña se lee del secreto montado; no aparece en argv ni en la línea de comandos.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/valkey_password)\" valkey-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - alma-dev
+
+  opensearch:
+    image: ${OPENSEARCH_IMAGE:?OPENSEARCH_IMAGE es obligatorio}
+    container_name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms${OPENSEARCH_HEAP:-512m} -Xmx${OPENSEARCH_HEAP:-512m}"
+      # SOLO DESARROLLO LOCAL:
+      # En este modo OpenSearch no tiene autenticación ni aislamiento entre tenants.
+      # Nunca debe usarse en producción ni exponerse fuera de loopback.
+      DISABLE_SECURITY_PLUGIN: "true"
+      # Evita la configuración demo del plugin de seguridad.
+      # PENDIENTE_VERIFICACION: confirmar que esta variable es aceptada por la imagen.
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "127.0.0.1:${OPENSEARCH_PORT:-9200}:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      # PENDIENTE_VERIFICACION: confirmar que curl existe en la imagen de OpenSearch.
+      # Alternativa propuesta si no existe: usar herramienta presente en la imagen
+      # o healthcheck externo desde el host contra 127.0.0.1:9200.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health | grep -Eq '\"status\":\"(green|yellow)\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    networks:
+      - alma-dev
+
+volumes:
+  postgres_data:
+    name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-postgres-data
+  valkey_data:
+    name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-valkey-data
+  opensearch_data:
+    name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-opensearch-data
+
+networks:
+  alma-dev:
+    name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-net
+    driver: bridge
+
+secrets:
+  valkey_auth_conf:
+    file: ./secrets/valkey_auth.conf
+  valkey_password:
+    file: ./secrets/valkey_password

@@ -5,15 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 import redis.asyncio as redis
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_db, get_valkey
-from app.models.domain import Sensor, AuditLog
+from app.api.deps import get_db, get_valkey, require_roles
+from app.models.domain import Sensor, AuditLog, User
 from app.schemas.domain import SensorCreate, SensorRead
 
 router = APIRouter(prefix="/sensors", tags=["Sensors"])
 
 
 @router.get("", response_model=List[SensorRead])
-async def list_sensors(db: AsyncSession = Depends(get_db)):
+async def list_sensors(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "analyst"))
+):
     result = await db.execute(select(Sensor))
     return result.scalars().all()
 
@@ -21,7 +24,8 @@ async def list_sensors(db: AsyncSession = Depends(get_db)):
 @router.post("", response_model=SensorRead, status_code=status.HTTP_201_CREATED)
 async def create_sensor(
     sensor_in: SensorCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()
@@ -44,8 +48,8 @@ async def create_sensor(
 
     audit_entry = AuditLog(
         tenant_id=tenant_uuid,
-        actor_type="system",
-        actor_id="api_client",
+        actor_type="user",
+        actor_id=str(current_user.id),
         action="sensor.create",
         resource=f"sensor:{sensor.id}",
         details={
@@ -100,7 +104,8 @@ async def register_heartbeat(
 async def get_sensor_status(
     sensor_id: UUID,
     db: AsyncSession = Depends(get_db),
-    cache: redis.Redis = Depends(get_valkey)
+    cache: redis.Redis = Depends(get_valkey),
+    current_user: User = Depends(require_roles("admin", "analyst"))
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()

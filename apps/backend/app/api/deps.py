@@ -35,7 +35,7 @@ async def get_db(
 
     if not tenant_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Se requiere un token Bearer o el encabezado 'X-Tenant-ID'."
         )
 

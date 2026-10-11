@@ -7,12 +7,14 @@ source .env
 TENANT_A="11111111-1111-1111-1111-111111111111"
 TENANT_B="22222222-2222-2222-2222-222222222222"
 
-echo "=== 0. Sembrando Tenants de prueba ==="
+echo "=== 0. Sembrando Tenants de prueba y usuarios para OpenSearch ==="
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "
 INSERT INTO alma.tenants (id, slug, name) VALUES
   ('$TENANT_A', 'tenant-a-test', 'Tenant Alpha Test'),
   ('$TENANT_B', 'tenant-b-test', 'Tenant Beta Test')
 ON CONFLICT (id) DO NOTHING;
+
+DELETE FROM alma.users WHERE email IN ('admin-os@tenant-a.com', 'admin-os@tenant-b.com');
 " > /dev/null
 
 echo "=== 1. Iniciando FastAPI ==="
@@ -32,10 +34,22 @@ for i in {1..10}; do
   sleep 0.5
 done
 
+curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
+  -d '{"email": "admin-os@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+
+curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_B" \
+  -d '{"email": "admin-os@tenant-b.com", "password": "Password123!", "role": "admin"}' > /dev/null
+
+TOKEN_A=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
+  -d '{"email": "admin-os@tenant-a.com", "password": "Password123!"}' | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+
+TOKEN_B=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_B" \
+  -d '{"email": "admin-os@tenant-b.com", "password": "Password123!"}' | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+
 echo "=== 2. Indexar evento de telemetría para Tenant A ==="
 ingest_res=$(curl -s -X POST http://127.0.0.1:8000/api/v1/telemetry/events \
   -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: $TENANT_A" \
+  -H "Authorization: Bearer $TOKEN_A" \
   -d '{
     "event_type": "suricata.alert",
     "severity": "high",
@@ -52,7 +66,7 @@ else
 fi
 
 echo "=== 3. Consultar telemetría de Tenant A ==="
-events_a=$(curl -s -H "X-Tenant-ID: $TENANT_A" http://127.0.0.1:8000/api/v1/telemetry/events)
+events_a=$(curl -s -H "Authorization: Bearer $TOKEN_A" http://127.0.0.1:8000/api/v1/telemetry/events)
 
 if echo "$events_a" | grep -q "suricata.alert"; then
   echo "PASS OS2: Tenant A recupera sus eventos de telemetría desde OpenSearch"
@@ -62,7 +76,7 @@ else
 fi
 
 echo "=== 4. Verificar aislamiento: Tenant B no ve eventos de Tenant A ==="
-events_b=$(curl -s -H "X-Tenant-ID: $TENANT_B" http://127.0.0.1:8000/api/v1/telemetry/events)
+events_b=$(curl -s -H "Authorization: Bearer $TOKEN_B" http://127.0.0.1:8000/api/v1/telemetry/events)
 
 if ! echo "$events_b" | grep -q "suricata.alert"; then
   echo "PASS OS3: Tenant B NO puede ver los eventos de telemetría de Tenant A (Aislamiento OpenSearch verificado)"

@@ -14,8 +14,8 @@ router = APIRouter(prefix="/sensors", tags=["Sensors"])
 
 @router.get("", response_model=List[SensorRead])
 async def list_sensors(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("admin", "analyst"))
+    current_user: User = Depends(require_roles("admin", "analyst")),
+    db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(select(Sensor))
     return result.scalars().all()
@@ -24,8 +24,8 @@ async def list_sensors(
 @router.post("", response_model=SensorRead, status_code=status.HTTP_201_CREATED)
 async def create_sensor(
     sensor_in: SensorCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("admin"))
+    current_user: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()
@@ -103,9 +103,9 @@ async def register_heartbeat(
 @router.get("/{sensor_id}/status", status_code=status.HTTP_200_OK)
 async def get_sensor_status(
     sensor_id: UUID,
+    current_user: User = Depends(require_roles("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
-    cache: redis.Redis = Depends(get_valkey),
-    current_user: User = Depends(require_roles("admin", "analyst"))
+    cache: redis.Redis = Depends(get_valkey)
 ):
     res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
     tenant_id_str = res.scalar()

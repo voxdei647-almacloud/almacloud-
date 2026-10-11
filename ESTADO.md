@@ -1,6 +1,6 @@
 # ESTADO DEL PROYECTO — ALMA CLOUD
 
-> **Última actualización:** Integración del Cliente OpenSearch Async e Ingesta/Consulta de Telemetría Multi-tenant.
+> **Última actualización:** Módulo de Autenticación JWT, Hashing Argon2id y Aislamiento RLS de Usuarios.
 
 ## 1. Infraestructura Base (Incremento 0)
 - **PostgreSQL 16**, **Valkey 8** y **OpenSearch 2.19.6** operativos en Docker Compose.
@@ -12,10 +12,11 @@
 - **Incremento 4:** Index Template en OpenSearch y caché Valkey (`PASS OS1-OS3, VK1`).
 
 ## 3. Capa de Servicios Backend (FastAPI / Python)
-- **Capa de Datos:** SQLAlchemy 2.0 Async + AsyncPG bajo el rol `alma_app` y tipos nativos (`PG_UUID`, `JSONB`, `INET`).
-- **Capa de Cache:** Valkey Async (`redis-py`) con gestión de claves con espacio de nombres (`tenant:<id>:sensor:<id>:heartbeat`) y TTL de 5 min (`PASS VK1-VK3`).
+- **Capa de Datos:** SQLAlchemy 2.0 Async + AsyncPG bajo el rol `alma_app` con RLS en `tenants`, `users`, `sensors` y `audit_logs`.
+- **Capa de Seguridad & Autenticación:** Hashing Argon2id, firmado de tokens JWT HS256 y registro atómico de auditoría (`PASS AUTH1-AUTH3`).
+- **Capa de Cache:** Valkey Async (`redis-py`) con claves con espacio de nombres (`tenant:<id>:sensor:<id>:heartbeat`) y TTL de 5 min (`PASS VK1-VK3`).
 - **Capa de Telemetría:** OpenSearch Async (`opensearch-py` + `aiohttp`) con consultas filtradas estrictamente por `tenant_id` (`PASS OS1-OS3`).
-- **Pruebas API v1:** Endpoints `/api/v1/sensors`, `/api/v1/audit-logs` y `/api/v1/telemetry/events` con trazabilidad y aislamiento RLS/NoSQL verificado.
 
 ## 4. Próximos Pasos
-- Módulo de Autenticación, hashing de contraseñas (Argon2) y firmado/validación de Tokens JWT por Tenant.
+- Middleware/Dependencia de Seguridad para la validación de Bearer Tokens JWT en rutas protegidas (`/sensors`, `/telemetry`, `/audit-logs`).
+- Control de Acceso Basado en Roles (RBAC: `admin`, `analyst`, `sensor`, `system`).

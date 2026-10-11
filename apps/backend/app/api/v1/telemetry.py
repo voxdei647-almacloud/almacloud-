@@ -14,6 +14,7 @@ from app.schemas.domain import TelemetryCreate, TelemetryRead, TelemetryBatchCre
 from app.services.suricata_parser import parse_eve_event
 from app.services.alert_engine import AlertRuleEngine
 from app.services.webhook_dispatcher import WebhookDispatcher
+from app.services.ml_engine import MLInferenceEngine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
@@ -37,11 +38,25 @@ async def ingest_telemetry_event(
         )
 
     now_iso = datetime.now(timezone.utc).isoformat()
+
+    event_dict = {
+        "event_type": event_in.event_type,
+        "severity": event_in.severity,
+        "raw_event": event_in.raw_event
+    }
+
+    # Inferencia de ML (IsolationForest + KMeans + Risk Level)
+    ml_eval = MLInferenceEngine.evaluate_event(event_dict)
+
     doc = {
         "tenant_id": tenant_id_str,
         "sensor_id": str(event_in.sensor_id) if event_in.sensor_id else None,
         "event_type": event_in.event_type,
         "severity": event_in.severity,
+        "anomaly_score": ml_eval["anomaly_score"],
+        "risk_level": ml_eval["risk_level"],
+        "cluster_id": ml_eval["cluster_id"],
+        "is_anomaly": ml_eval["is_anomaly"],
         "source_ip": event_in.source_ip,
         "destination_ip": event_in.destination_ip,
         "raw_event": event_in.raw_event,
@@ -58,6 +73,9 @@ async def ingest_telemetry_event(
         "id": response["_id"],
         "status": "indexed",
         "tenant_id": tenant_id_str,
+        "anomaly_score": ml_eval["anomaly_score"],
+        "risk_level": ml_eval["risk_level"],
+        "cluster_id": ml_eval["cluster_id"],
         "alert_triggered": generated_alert is not None,
         "alert_details": generated_alert,
         "timestamp": now_iso
@@ -82,13 +100,26 @@ async def ingest_telemetry_batch(
     now_iso = datetime.now(timezone.utc).isoformat()
     bulk_body = []
     events_for_alerts = []
+    ml_evaluations = []
 
     for item in batch_in.events:
+        temp_dict = {
+            "event_type": item.event_type,
+            "severity": item.severity,
+            "raw_event": item.raw_event
+        }
+        ml_eval = MLInferenceEngine.evaluate_event(temp_dict)
+        ml_evaluations.append(ml_eval)
+
         event_dict = {
             "tenant_id": tenant_id_str,
             "sensor_id": str(item.sensor_id) if item.sensor_id else None,
             "event_type": item.event_type,
             "severity": item.severity,
+            "anomaly_score": ml_eval["anomaly_score"],
+            "risk_level": ml_eval["risk_level"],
+            "cluster_id": ml_eval["cluster_id"],
+            "is_anomaly": ml_eval["is_anomaly"],
             "source_ip": item.source_ip,
             "destination_ip": item.destination_ip,
             "raw_event": item.raw_event,
@@ -108,9 +139,12 @@ async def ingest_telemetry_batch(
         for alt in alerts:
             asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, alt))
 
+    batch_stats = MLInferenceEngine.generate_batch_statistics(ml_evaluations)
+
     return {
         "ingested_count": len(batch_in.events),
         "alerts_generated": len(alerts),
+        "ml_statistics": batch_stats,
         "errors": bulk_response.get("errors", False),
         "status": "processed",
         "timestamp": now_iso
@@ -135,14 +169,27 @@ async def ingest_suricata_eve_batch(
     now_iso = datetime.now(timezone.utc).isoformat()
     bulk_body = []
     events_for_alerts = []
+    ml_evaluations = []
 
     for raw_eve in eve_logs:
         parsed = parse_eve_event(raw_eve)
+        temp_dict = {
+            "event_type": parsed["event_type"],
+            "severity": parsed["severity"],
+            "raw_event": raw_eve
+        }
+        ml_eval = MLInferenceEngine.evaluate_event(temp_dict)
+        ml_evaluations.append(ml_eval)
+
         event_dict = {
             "tenant_id": tenant_id_str,
             "sensor_id": raw_eve.get("host"),
             "event_type": parsed["event_type"],
             "severity": parsed["severity"],
+            "anomaly_score": ml_eval["anomaly_score"],
+            "risk_level": ml_eval["risk_level"],
+            "cluster_id": ml_eval["cluster_id"],
+            "is_anomaly": ml_eval["is_anomaly"],
             "source_ip": parsed.get("source_ip"),
             "destination_ip": parsed.get("destination_ip"),
             "raw_event": raw_eve,
@@ -162,9 +209,12 @@ async def ingest_suricata_eve_batch(
         for alt in alerts:
             asyncio.create_task(WebhookDispatcher.send_alert_webhook(WEBHOOK_URL, alt))
 
+    batch_stats = MLInferenceEngine.generate_batch_statistics(ml_evaluations)
+
     return {
         "ingested_count": len(eve_logs),
         "alerts_generated": len(alerts),
+        "ml_statistics": batch_stats,
         "errors": bulk_response.get("errors", False),
         "status": "normalized_and_indexed",
         "timestamp": now_iso

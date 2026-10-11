@@ -1,0 +1,21 @@
+{
+  "index_patterns": ["alma-telemetry-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "1s"
+    },
+    "mappings": {
+      "properties": {
+        "tenant_id": { "type": "keyword" },
+        "sensor_id": { "type": "keyword" },
+        "channel": { "type": "keyword" },
+        "event_type": { "type": "keyword" },
+        "severity": { "type": "keyword" },
+        "timestamp": { "type": "date" },
+        "payload": { "type": "object", "dynamic": true }
+      }
+    }
+  }
+}

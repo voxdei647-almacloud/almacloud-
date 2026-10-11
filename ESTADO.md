@@ -1,6 +1,6 @@
 # ESTADO DEL PROYECTO — ALMA CLOUD
 
-> **Última actualización:** Validación E2E de API Backend FastAPI y Aislamiento RLS.
+> **Última actualización:** Validación E2E de Auditoría Inmutable y Aislamiento RLS en API.
 
 ## 1. Infraestructura Base (Incremento 0)
 - **PostgreSQL 16**, **Valkey 8** y **OpenSearch 2.19.6** operativos en Docker Compose.
@@ -12,11 +12,11 @@
 - **Incremento 4:** Index Template en OpenSearch y caché Valkey (`PASS OS1-OS3, VK1`).
 
 ## 3. Capa de Servicios Backend (FastAPI / Python)
-- **Capa de Datos:** SQLAlchemy 2.0 Async + AsyncPG ejecutando bajo el rol no-superusuario `alma_app`.
-- **Inyección RLS:** Contexto de sesión inyectado mediante encabezado HTTP `X-Tenant-ID` en `deps.py`.
-- **Pruebas API v1:** Endpoint `/api/v1/sensors` con aislamiento estricto RLS verificado (`PASS API1-API4`).
+- **Capa de Datos:** SQLAlchemy 2.0 Async + AsyncPG bajo el rol `alma_app` y tipos nativos (`PG_UUID`, `JSONB`, `INET`).
+- **Inyección RLS:** Contexto de sesión inyectado mediante encabezado HTTP `X-Tenant-ID` (`deps.py`).
+- **Pruebas API v1:** Endpoints `/api/v1/sensors` y `/api/v1/audit-logs` con trazabilidad automática y aislamiento RLS verificado (`PASS API1-API5`).
 
 ## 4. Próximos Pasos
-- Endpoint de auditoría inmutable (`GET /api/v1/audit-logs`).
-- Integración de clientes asíncronos para **Valkey** (estado de sensores) y **OpenSearch** (telemetría).
-- Capa de autenticación y firmado JWT/mTLS para comunicación con agentes de borde.
+- Cliente asíncrono e inyección de caché para **Valkey** (`redis-py` async / `valkey-py`).
+- Cliente asíncrono para **OpenSearch** (procesamiento de eventos NIDS/EDR).
+- Módulo de Autenticación y firmado de Tokens JWT por Tenant.

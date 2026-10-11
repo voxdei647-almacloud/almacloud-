@@ -11,7 +11,7 @@ curl -s -X PUT "http://127.0.0.1:9200/_index_template/alma-telemetry-template" \
 echo "PASS OS1: Index Template 'alma-telemetry-template' registrado correctamente"
 
 echo "=== 2. Creando índice de prueba e ingiriendo evento ==="
-curl -s -X PUT "http://127.0.0.1:9200/alma-telemetry-2026.10.10/_doc/doc-1" \
+curl -s -X PUT "http://127.0.0.1:9200/alma-telemetry-2026.10.10/_doc/doc-1?refresh=true" \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "33333333-3333-3333-3333-333333333333",
@@ -21,7 +21,7 @@ curl -s -X PUT "http://127.0.0.1:9200/alma-telemetry-2026.10.10/_doc/doc-1" \
     "severity": "info",
     "timestamp": "2026-10-10T18:00:00Z",
     "payload": {"process": "ls", "pid": 1234}
-  }' | grep -q '"result":"created"'
+  }' | grep -E -q '"result":"(created|updated)"'
 echo "PASS OS2: Documento de telemetría indexado correctamente"
 
 echo "=== 3. Validando aislamiento de búsqueda por tenant ==="

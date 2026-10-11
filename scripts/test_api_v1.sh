@@ -25,7 +25,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Esperar a que el puerto 8000 esté disponible
 for i in {1..10}; do
   if curl -s http://127.0.0.1:8000/healthz | grep -q "healthy"; then
     echo "PASS API1: Backend en línea y responde /healthz"
@@ -43,30 +42,41 @@ else
   exit 1
 fi
 
-echo "=== 3. Creando sensor para Tenant A via POST /api/v1/sensors ==="
+echo "=== 3. Creando sensor para Tenant A y comprobando registro de auditoría ==="
 post_res=$(curl -s -X POST http://127.0.0.1:8000/api/v1/sensors \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"hostname": "api-sensor-a1", "profile": "endpoint"}')
+  -d '{"hostname": "api-audit-sensor-a1", "profile": "endpoint"}')
 
-if echo "$post_res" | grep -q '"hostname":"api-sensor-a1"'; then
+if echo "$post_res" | grep -q '"hostname":"api-audit-sensor-a1"'; then
   echo "PASS API3: Sensor creado exitosamente bajo Tenant A via API"
 else
   echo "FAIL API3: Error al crear sensor: $post_res"
   exit 1
 fi
 
-echo "=== 4. Validando aislamiento RLS en lectura (Tenant A vs Tenant B) ==="
+echo "=== 4. Validando aislamiento RLS en sensores (Tenant A vs Tenant B) ==="
 sensors_a=$(curl -s -H "X-Tenant-ID: $TENANT_A" http://127.0.0.1:8000/api/v1/sensors)
 sensors_b=$(curl -s -H "X-Tenant-ID: $TENANT_B" http://127.0.0.1:8000/api/v1/sensors)
 
-if echo "$sensors_a" | grep -q "api-sensor-a1" && ! echo "$sensors_b" | grep -q "api-sensor-a1"; then
-  echo "PASS API4: Tenant A visualiza su sensor y Tenant B no tiene acceso a él (RLS verificado via HTTP)"
+if echo "$sensors_a" | grep -q "api-audit-sensor-a1" && ! echo "$sensors_b" | grep -q "api-audit-sensor-a1"; then
+  echo "PASS API4: Tenant A visualiza su sensor y Tenant B no tiene acceso a él (RLS verificado)"
 else
-  echo "FAIL API4: Falla de aislamiento RLS en API"
-  echo "Respuesta Tenant A: $sensors_a"
-  echo "Respuesta Tenant B: $sensors_b"
+  echo "FAIL API4: Falla de aislamiento RLS en API de sensores"
   exit 1
 fi
 
-echo "--- RESULTADO FINAL: PRUEBAS DE API PASARON EXITOSAMENTE (API1-API4) ---"
+echo "=== 5. Validando consulta de Audit Logs y aislamiento RLS (Tenant A vs Tenant B) ==="
+logs_a=$(curl -s -H "X-Tenant-ID: $TENANT_A" http://127.0.0.1:8000/api/v1/audit-logs)
+logs_b=$(curl -s -H "X-Tenant-ID: $TENANT_B" http://127.0.0.1:8000/api/v1/audit-logs)
+
+if echo "$logs_a" | grep -q "sensor.create" && ! echo "$logs_b" | grep -q "sensor.create"; then
+  echo "PASS API5: Tenant A visualiza sus logs de auditoría y Tenant B no (RLS verificado en audit-logs)"
+else
+  echo "FAIL API5: Falla de aislamiento RLS en API de audit-logs"
+  echo "Respuesta Tenant A: $logs_a"
+  echo "Respuesta Tenant B: $logs_b"
+  exit 1
+fi
+
+echo "--- RESULTADO FINAL: PRUEBAS DE API Y AUDITORÍA PASARON EXITOSAMENTE (API1-API5) ---"

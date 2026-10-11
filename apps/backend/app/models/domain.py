@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 from sqlalchemy import String, DateTime, ForeignKey, text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB, INET
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -51,10 +52,12 @@ class AuditLog(Base):
     tenant_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("alma.tenants.id"), nullable=False
     )
-    actor: Mapped[str] = mapped_column(String(128), nullable=False)
-    action: Mapped[str] = mapped_column(String(64), nullable=False)
-    resource: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    resource: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    timestamp: Mapped[datetime] = mapped_column(
+    ip_address: Mapped[Optional[str]] = mapped_column(INET, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )

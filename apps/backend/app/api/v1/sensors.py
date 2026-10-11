@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
-from app.models.domain import Sensor
+from app.models.domain import Sensor, AuditLog
 from app.schemas.domain import SensorCreate, SensorRead
 
 router = APIRouter(prefix="/sensors", tags=["Sensors"])
@@ -29,13 +29,31 @@ async def create_sensor(
             detail="Contexto de tenant no configurado."
         )
 
+    tenant_uuid = UUID(tenant_id_str)
+
     sensor = Sensor(
-        tenant_id=UUID(tenant_id_str),
+        tenant_id=tenant_uuid,
         hostname=sensor_in.hostname,
         profile=sensor_in.profile,
         lifecycle_status="active"
     )
     db.add(sensor)
+    await db.flush()
+
+    audit_entry = AuditLog(
+        tenant_id=tenant_uuid,
+        actor_type="system",
+        actor_id="api_client",
+        action="sensor.create",
+        resource=f"sensor:{sensor.id}",
+        details={
+            "hostname": sensor.hostname,
+            "profile": sensor.profile,
+            "status": sensor.lifecycle_status
+        }
+    )
+    db.add(audit_entry)
+
     await db.commit()
     await db.refresh(sensor)
     return sensor

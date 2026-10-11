@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,10 +41,12 @@ class SensorRead(SensorBase):
 class AuditLogRead(BaseModel):
     id: UUID
     tenant_id: UUID
-    actor: str
+    actor_type: str
+    actor_id: str
     action: str
     resource: str
     details: Dict[str, Any]
-    timestamp: datetime
+    ip_address: Optional[str] = None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

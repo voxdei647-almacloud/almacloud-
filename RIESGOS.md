@@ -1,24 +1,24 @@
 # RIESGOS
 
-> **Estado de este documento:** Registros actualizados con evidencia de ejecución del cierre del Incremento 0.
+Estados basados únicamente en evidencia de terminal pegada (2026-10-11). `VERIFICADO` = hay salida real. `PENDIENTE` = sin evidencia o sin decidir.
 
 | ID | Riesgo | Impacto | Mitigación | Estado |
 |---|---|---|---|---|
-| R-01 | Tags flotantes de PostgreSQL, Valkey y OpenSearch. | Reproducibilidad comprometida. | Fijar etiqueta + digest en `.env.example`, `.env` y `VERSIONES.md`. | `VERIFICADO`: Reconstrucción probada y confirmada mediante digests SHA-256 en `.env`. |
-| R-02 | OpenSearch con seguridad desactivada en desarrollo. | Sin autenticación ni aislamiento entre tenants. | Solo loopback, nunca producción. | `ACEPTADO` solo en desarrollo local (`VERIFICADO`). |
-| R-03 | Contraseña de Valkey visible en la lista de procesos. | Exposición local del secreto. | Secreto montado e `include` en `valkey.conf`. | `VERIFICADO`: `docker compose top valkey` sin `requirepass`. |
-| R-04 | Licencia de Valkey/Redis pendiente de revisión legal. | Riesgo legal. | No congelar la decisión hasta la revisión legal. | `PENDIENTE` |
-| R-05 | Healthchecks sin verificar contra las imágenes reales. | Falsos positivos/negativos. | Ejecutar contra las imágenes reales. | `VERIFICADO`: los tres servicios `healthy`. |
-| R-06 | `curl` podría no existir en la imagen de OpenSearch. | Healthcheck fallaría. | Confirmar disponibilidad. | `VERIFICADO`: healthcheck con `curl` operativo. |
-| R-07 | `REDISCLI_AUTH` en `valkey-cli`. | Healthcheck de Valkey fallaría. | Confirmar soporte. | `VERIFICADO`: `NOAUTH` sin clave y `PONG` con `REDISCLI_AUTH`. |
-| R-08 | `vm.max_map_count` bajo en el host. | OpenSearch falla al arrancar. | Configurar 262144 en el host. | `VERIFICADO`: valor 262144 activo en Debian 13 host. |
-| R-09 | OpenSearch en modo single-node. | Sin alta disponibilidad. | Aceptado solo en desarrollo local. | `ACEPTADO` |
-| R-10 | `docker compose down -v` borra datos. | Pérdida irreversible de volúmenes. | Ejecución bajo autorización explícita. | `VERIFICADO`: Reconstrucción limpia ejecutada y documentada en README.md. |
-| R-11 | Placeholders `CAMBIAR_ESTO` en `.env`. | Arranque con contraseñas por defecto. | Chequeo explícito ignorando líneas comentadas. | `VERIFICADO`: Validación incluida en README.md. |
-| R-12 | `POSTGRES_USER` es superusuario. | Salta RLS. | Roles separados `alma_migrator` y `alma_app` (A3 y D-L1 aprobadas). | Decisión aprobada; implementación diferida al Incremento 1 (`PENDIENTE`). |
-| R-13 | `noeviction` en Valkey. | Rechazo de escrituras al llenar memoria. | Documentado; ajustar `VALKEY_MAXMEMORY`. | `DOCUMENTADO` |
-| R-14 | `POSTGRES_PASSWORD` en `docker inspect`. | Fuga local de credenciales. | Evitar `docker compose config` sin `-q`. | `DOCUMENTADO` |
-| R-15 | Comandos asumen shell POSIX. | Fallos en Windows. | Trabajo en Linux nativo (Debian 13). | `VERIFICADO`: Entorno Debian 13 nativo. |
-| R-16 | Permisos de secretos (`uid 999`). | Valkey no arranca por `Permission denied`. | Secretos con propietario `uid 999` y modo `600`. | `VERIFICADO`: Corregido y documentado en README.md. |
-| R-17 | Antigüedad de imagen `valkey/valkey:8-bookworm` (~13 meses). | Parches de seguridad no incorporados. | Evaluar ramas recientes en la matriz de versiones. | `ABIERTO` |
-| R-18 | Archivos truncados o vacíos por copia/pegado SSH. | Configuración o scripts incompletos. | Verificación de tamaño (`test -s`) y reconstrucción desde migraciones. | `VERIFICADO`: `test -s` en `valkey.conf` e inspección de archivos integrados. |
+| R-01 | Etiquetas flotantes de las imágenes | Reproducibilidad | Etiqueta más digest en `.env.example` y `.env` | VERIFICADO la fijación (`grep` y `docker compose ps` con `@sha256`). La fijación no aprueba versiones (V1 pendiente) |
+| R-02 | OpenSearch con seguridad desactivada | Sin autenticación ni aislamiento entre tenants | Solo loopback; nunca producción | ACEPTADO solo en desarrollo local |
+| R-03 | Clave de Valkey en la lista de procesos | Exposición local del secreto | Secreto montado e `include` | VERIFICADO (`docker compose top valkey` sin `requirepass`) |
+| R-04 | Licencia Valkey/Redis | Riesgo legal | No congelar sin revisión legal | PENDIENTE |
+| R-05 | Healthchecks sin probar en las imágenes reales | Falsos positivos o negativos | Probar con las imágenes reales | VERIFICADO (tres servicios `healthy` más de 2 horas) |
+| R-06 | `curl` ausente en OpenSearch | Healthcheck fallaría | Confirmar disponibilidad | VERIFICADO |
+| R-07 | `REDISCLI_AUTH` no soportado en `valkey-cli` | Healthcheck de Valkey fallaría | Confirmar soporte | VERIFICADO (`NOAUTH` y `PONG`) |
+| R-08 | `vm.max_map_count` bajo | OpenSearch no arranca | Configurar 262144 | VERIFICADO |
+| R-09 | OpenSearch de un solo nodo | Sin alta disponibilidad | Solo desarrollo | ACEPTADO |
+| R-10 | `docker compose down -v` borra datos | Pérdida irreversible | Solo con autorización; documentado en README | VERIFICADO el procedimiento (`down -v` y reconstrucción ejecutados con autorización) |
+| R-11 | Placeholders `CAMBIAR_ESTO` en `.env` | Arranque con contraseña conocida | Comprobación manual excluyendo comentarios | VERIFICADO manualmente; no hay bloqueo automático |
+| R-12 | `POSTGRES_USER` es superusuario | Salta RLS | No usarlo como rol de aplicación; roles `alma_*` | Documentado. Roles: PROPUESTOS (Incremento 1a), sin ejecutar |
+| R-13 | `noeviction` en Valkey | Escrituras rechazadas al llenarse | Documentado; ajustar `VALKEY_MAXMEMORY` | Documentado; no probado |
+| R-14 | `POSTGRES_PASSWORD` en `environment` | Visible en `docker inspect` y `docker compose config` | Usar `config -q`; evaluar `POSTGRES_PASSWORD_FILE` | ABIERTO; aceptado en desarrollo |
+| R-15 | Comandos asumen shell POSIX | Fallos en CMD o PowerShell | Usar Linux o WSL2 | Documentado |
+| R-16 | Permisos de secretos y uid del contenedor | Valkey no arranca si no lee el secreto | `chown 999` solo de los dos archivos, modo 600 | VERIFICADO funcionalmente. Depende del uid de esta imagen |
+| R-17 | Imagen `valkey:8-bookworm` con compilación de hace ~13 meses | Parches de seguridad posiblemente ausentes | Revisar ramas más recientes antes de congelar la matriz | ABIERTO |
+| R-18 | Pegar archivos largos con `cat <<EOF` por SSH | Archivos truncados o corruptos | `scp` y `sha256sum` | OCURRIÓ (README.md y RIESGOS.md del commit `2e28dd3`); corregido en este paquete |

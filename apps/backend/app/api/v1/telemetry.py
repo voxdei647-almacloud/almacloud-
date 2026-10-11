@@ -10,6 +10,7 @@ from app.api.deps import get_db, get_opensearch, require_roles
 from app.models.domain import User
 from app.schemas.domain import TelemetryCreate, TelemetryRead, TelemetryBatchCreate
 from app.services.suricata_parser import parse_eve_event
+from app.services.alert_engine import AlertRuleEngine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
@@ -44,10 +45,14 @@ async def ingest_telemetry_event(
     }
 
     response = await os_client.index(index=INDEX_NAME, body=doc, refresh=True)
+    generated_alert = AlertRuleEngine.evaluate_event(tenant_id_str, doc)
+
     return {
         "id": response["_id"],
         "status": "indexed",
         "tenant_id": tenant_id_str,
+        "alert_triggered": generated_alert is not None,
+        "alert_details": generated_alert,
         "timestamp": now_iso
     }
 
@@ -69,10 +74,10 @@ async def ingest_telemetry_batch(
 
     now_iso = datetime.now(timezone.utc).isoformat()
     bulk_body = []
+    events_for_alerts = []
 
     for item in batch_in.events:
-        bulk_body.append({"index": {"_index": INDEX_NAME}})
-        bulk_body.append({
+        event_dict = {
             "tenant_id": tenant_id_str,
             "sensor_id": str(item.sensor_id) if item.sensor_id else None,
             "event_type": item.event_type,
@@ -81,14 +86,20 @@ async def ingest_telemetry_batch(
             "destination_ip": item.destination_ip,
             "raw_event": item.raw_event,
             "timestamp": now_iso
-        })
+        }
+        bulk_body.append({"index": {"_index": INDEX_NAME}})
+        bulk_body.append(event_dict)
+        events_for_alerts.append(event_dict)
 
     if not bulk_body:
         return {"ingested_count": 0, "status": "empty_batch"}
 
     bulk_response = await os_client.bulk(body=bulk_body, refresh=True)
+    alerts = AlertRuleEngine.process_batch(tenant_id_str, events_for_alerts)
+
     return {
         "ingested_count": len(batch_in.events),
+        "alerts_generated": len(alerts),
         "errors": bulk_response.get("errors", False),
         "status": "processed",
         "timestamp": now_iso
@@ -112,11 +123,11 @@ async def ingest_suricata_eve_batch(
 
     now_iso = datetime.now(timezone.utc).isoformat()
     bulk_body = []
+    events_for_alerts = []
 
     for raw_eve in eve_logs:
         parsed = parse_eve_event(raw_eve)
-        bulk_body.append({"index": {"_index": INDEX_NAME}})
-        bulk_body.append({
+        event_dict = {
             "tenant_id": tenant_id_str,
             "sensor_id": raw_eve.get("host"),
             "event_type": parsed["event_type"],
@@ -125,14 +136,20 @@ async def ingest_suricata_eve_batch(
             "destination_ip": parsed.get("destination_ip"),
             "raw_event": raw_eve,
             "timestamp": raw_eve.get("timestamp", now_iso)
-        })
+        }
+        bulk_body.append({"index": {"_index": INDEX_NAME}})
+        bulk_body.append(event_dict)
+        events_for_alerts.append(event_dict)
 
     if not bulk_body:
         return {"ingested_count": 0, "status": "empty_batch"}
 
     bulk_response = await os_client.bulk(body=bulk_body, refresh=True)
+    alerts = AlertRuleEngine.process_batch(tenant_id_str, events_for_alerts)
+
     return {
         "ingested_count": len(eve_logs),
+        "alerts_generated": len(alerts),
         "errors": bulk_response.get("errors", False),
         "status": "normalized_and_indexed",
         "timestamp": now_iso

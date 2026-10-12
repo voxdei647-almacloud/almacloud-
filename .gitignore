@@ -22,3 +22,4 @@ secrets/*
 *.p12
 *.secret
 docker-compose.override.yml
+*.bak

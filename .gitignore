@@ -11,3 +11,14 @@ htmlcov/
 *.log
 secrets/*.pem
 !secrets/.gitkeep
+
+# Secretos y claves
+secrets/*
+!secrets/.gitkeep
+.env.*
+!.env.example
+*.key
+*.crt
+*.p12
+*.secret
+docker-compose.override.yml

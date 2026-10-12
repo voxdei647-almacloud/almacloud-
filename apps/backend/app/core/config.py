@@ -39,16 +39,13 @@ class Settings(BaseSettings):
             app_secret = Path("secrets/postgres_app_password")
             if app_secret.is_file() and app_secret.read_text().strip():
                 password = app_secret.read_text().strip()
-            elif self.POSTGRES_PASSWORD:
-                password = self.POSTGRES_PASSWORD
-                user = self.POSTGRES_USER or "alma_dev"
-            else:
-                pg_secret = Path("secrets/postgres_password")
-                if pg_secret.is_file() and pg_secret.read_text().strip():
-                    password = pg_secret.read_text().strip()
-                    user = self.POSTGRES_USER or "alma_dev"
-                else:
-                    password = ""
+
+        if not password:
+            raise RuntimeError(
+                "Falta credencial de la aplicación (alma_app). "
+                "Define POSTGRES_APP_PASSWORD o crea secrets/postgres_app_password. "
+                "No se permite fallback a rol privilegiado (alma_dev)."
+            )
 
         return (
             f"postgresql+asyncpg://{user}:{password}"

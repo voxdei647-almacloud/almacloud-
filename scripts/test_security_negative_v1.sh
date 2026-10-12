@@ -200,4 +200,108 @@ else
   exit 1
 fi
 
+# =====================================================
+# SEC_NEG7-13: Suite ampliada de hardening (2026-10-12)
+# =====================================================
+
+echo ""
+echo "=== 7. Preparando tokens adicionales para SEC_NEG8/9 ==="
+./scripts/lib/seed_user.sh "$TENANT_A" "tadmin-sec@tenant-a.com" "Password123!" "tenant_admin"
+./scripts/lib/seed_user.sh "$TENANT_A" "analyst-sec@tenant-a.com" "Password123!" "analyst"
+
+TOKEN_TADMIN=$(curl -s -X POST "$API/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: $TENANT_A" \
+  -d '{"email": "tadmin-sec@tenant-a.com", "password": "Password123!"}' \
+  | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+
+TOKEN_ANALYST=$(curl -s -X POST "$API/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: $TENANT_A" \
+  -d '{"email": "analyst-sec@tenant-a.com", "password": "Password123!"}' \
+  | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+
+TOKEN_SUPER=$(curl -s -X POST "$API/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+  -d "{\"email\": \"${BOOTSTRAP_ADMIN_EMAIL}\", \"password\": \"${BOOTSTRAP_ADMIN_PASSWORD}\"}" \
+  | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+
+echo "  tokens: super=${TOKEN_SUPER:0:12}... tadmin=${TOKEN_TADMIN:0:12}... analyst=${TOKEN_ANALYST:0:12}..."
+
+# --- SEC_NEG7: /register sin token -> 401
+code7=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/v1/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "anon-sec@test.com", "password": "Password123!", "role": "admin"}')
+if [ "$code7" -eq 401 ]; then
+  echo "PASS SEC_NEG7: /register sin token rechazado con HTTP 401"
+else
+  echo "FAIL SEC_NEG7: Se esperaba 401, se obtuvo $code7"; exit 1
+fi
+
+# --- SEC_NEG8: /register con token de analyst -> 403
+code8=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/v1/auth/register" \
+  -H "Authorization: Bearer $TOKEN_ANALYST" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "analyst-try@test.com", "password": "Password123!", "role": "sensor"}')
+if [ "$code8" -eq 403 ]; then
+  echo "PASS SEC_NEG8: /register con rol analyst rechazado con HTTP 403"
+else
+  echo "FAIL SEC_NEG8: Se esperaba 403, se obtuvo $code8"; exit 1
+fi
+
+# --- SEC_NEG9: tenant_admin creando super_admin -> 403
+code9=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/v1/auth/register" \
+  -H "Authorization: Bearer $TOKEN_TADMIN" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "rogue-super@test.com", "password": "Password123!", "role": "super_admin"}')
+if [ "$code9" -eq 403 ]; then
+  echo "PASS SEC_NEG9: tenant_admin intentando crear super_admin rechazado con HTTP 403"
+else
+  echo "FAIL SEC_NEG9: Se esperaba 403, se obtuvo $code9"; exit 1
+fi
+
+# --- SEC_NEG10: GET /sensors no expone api_key ni hashes
+sensors_res=$(curl -s -X GET "$API/api/v1/sensors" \
+  -H "Authorization: Bearer $TOKEN_TADMIN")
+if echo "$sensors_res" | grep -qiE 'api_key|key_hash|password|secret'; then
+  echo "FAIL SEC_NEG10: GET /sensors expone campos sensibles"; exit 1
+else
+  echo "PASS SEC_NEG10: GET /sensors no expone api_key, key_hash, password ni secret"
+fi
+
+# --- SEC_NEG11: password_hash empieza por $argon2id$
+pg_hash=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c \
+  "SELECT password_hash FROM alma.users WHERE email = 'analyst-sec@tenant-a.com';" | tr -d '\r\n')
+if [[ "$pg_hash" == '$argon2id$'* ]]; then
+  echo "PASS SEC_NEG11: password_hash almacenado con Argon2id"
+else
+  echo "FAIL SEC_NEG11: hash inesperado (${pg_hash:0:20}...)"; exit 1
+fi
+
+# --- SEC_NEG12: role inválido -> 422 (Pydantic) antes de tocar la BD
+code12=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/v1/auth/register" \
+  -H "Authorization: Bearer $TOKEN_SUPER" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "badrole@test.com", "password": "Password123!", "role": "god_mode"}')
+if [ "$code12" -eq 422 ]; then
+  echo "PASS SEC_NEG12: role inválido rechazado por Pydantic con HTTP 422"
+else
+  echo "FAIL SEC_NEG12: Se esperaba 422, se obtuvo $code12"; exit 1
+fi
+
+# --- SEC_NEG13: cabeceras de seguridad HTTP presentes
+hdrs=$(curl -s -I "$API/healthz")
+missing=""
+for h in "X-Content-Type-Options: nosniff" "X-Frame-Options: DENY" "Strict-Transport-Security" "Content-Security-Policy"; do
+  if ! echo "$hdrs" | grep -qi "$h"; then
+    missing="$missing [$h]"
+  fi
+done
+if [ -z "$missing" ]; then
+  echo "PASS SEC_NEG13: cabeceras nosniff, DENY, HSTS, CSP presentes"
+else
+  echo "FAIL SEC_NEG13: faltan cabeceras:$missing"; exit 1
+fi
+
 echo "--- RESULTADO FINAL: TODAS LAS PRUEBAS NEGATIVAS DE SEGURIDAD PASARON (100%) ---"

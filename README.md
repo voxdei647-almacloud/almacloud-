@@ -3,13 +3,17 @@
 Plataforma de ciberseguridad y telemetría multi-tenant basada en microservicios y contenedores Docker.
 
 ## Estado del Sistema
-- **Estado General:** 100% Funcional y Validado vía Suite Integral E2E (`scripts/run_all_tests.sh`).
-- **Backend:** FastAPI (Python 3.13) con arquitectura asíncrona, JWT Bearer Auth y RBAC.
-- **Base de Datos Relacional:** PostgreSQL 16 con Row Level Security (RLS) habilitado (`alma.tenants`, `alma.sensors`, `alma.users`, `alma.audit_logs`).
+
+**Línea base:** `ADOPTADA, PARCIALMENTE VERIFICADA`. Las suites funcional (12/12) y de seguridad (13/13) pasan sobre el entorno actual. Existen deudas de hardening en curso (ver "Problemas conocidos"). **No usar en producción sin cerrarlas.**
+
+- **Backend:** FastAPI (Python 3.13) con SQLAlchemy async, JWT RS256, RBAC multi-rol y aislamiento multi-tenant con RLS de PostgreSQL.
+- **Autenticación de usuarios:** `/auth/register` protegido por `require_roles("super_admin","tenant_admin")` con jerarquía de roles. El primer `super_admin` se crea con `scripts/bootstrap_admin.py` (ver "Arranque rápido").
+- **Base de Datos:** PostgreSQL 16 con Row Level Security forzado en `alma.tenants`, `alma.users`, `alma.sensors`, `alma.audit_logs`, `alma.sensor_credentials`. El backend conecta como `alma_app` (sin superusuario, sin `BYPASSRLS`).
 - **Caché y Live Status:** Valkey 8 con autenticación por archivo de secretos.
-- **Búsqueda y Telemetría:** OpenSearch 2.19.6 con mapeo directo de `tenant_id` (`keyword`) y plantillas configuradas.
-- **Proxy Inverso:** Nginx con resolución DNS interna de Docker (`127.0.0.11`).
-- **Motor ML:** Inferencia en tiempo real mediante `IsolationForest` para detección de anomalías.
+- **Búsqueda y Telemetría:** OpenSearch 2.19.6 con índice `alma-telemetry-v1`.
+- **Proxy Inverso:** Nginx con resolución DNS interna de Docker.
+- **Motor ML:** Inferencia `IsolationForest` para scoring de anomalías. Fuera del MVP según Plan Maestro; actualmente activo en el pipeline de ingesta.
+- **Suites:** 12 bloques funcionales + 13 pruebas negativas de seguridad. Todas en PASS en el entorno actual.
 
 ---
 
@@ -103,11 +107,35 @@ export PYTHONPATH="$(pwd)/apps/backend"
 python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-### Verificar
+### Inicializar el primer `super_admin` (una sola vez)
 
 ```bash
+# 1. Añadir a .env las variables de bootstrap (con password aleatorio)
+NEW_PW=$(openssl rand -hex 24)
+cat >> .env <<EOF
+
+# Bootstrap super_admin (dev)
+BOOTSTRAP_ADMIN_EMAIL=admin@alma.io
+BOOTSTRAP_ADMIN_PASSWORD=${NEW_PW}
+BOOTSTRAP_TENANT_ID=00000000-0000-0000-0000-000000000000
+BOOTSTRAP_TENANT_NAME=Plataforma ALMA System
+BOOTSTRAP_TENANT_SLUG=alma-platform
+EOF
+
+# 2. Aplicar migración 0004 (roles CHECK ampliado)
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -f - < apps/backend/db/migrations/0004_users_role_check_extend.sql
+
+# 3. Crear el super_admin (idempotente)
+set -a; source .env; set +a
+PYTHONPATH=apps/backend .venv/bin/python scripts/bootstrap_admin.py
 curl -s http://127.0.0.1:8000/healthz
-# {"status":"healthy","service":"ALMA Cloud"}
+
+curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+  -d "{\"email\": \"$BOOTSTRAP_ADMIN_EMAIL\", \"password\": \"$BOOTSTRAP_ADMIN_PASSWORD\"}" | head -c 100
+# {"access_token":"eyJhbGciOiJSUzI1NiIs...
 ```
 
 ---
@@ -128,7 +156,17 @@ Cubre 12 bloques: API base, Valkey, OpenSearch, auth JWT, protección JWT, RBAC,
 ./scripts/run_security_tests.sh
 ```
 
-Cubre 6 pruebas negativas (cross-tenant, JWT manipulado, JWT expirado, API Key inválida, API Key cross-tenant, sin auth, JWT sin `tenant_id`) más rate limiting (HTTP 429).
+Cubre 13 pruebas negativas (SEC_NEG1-13) más rate limiting (RATE1):
+
+- **Cross-tenant:** DELETE sobre recurso ajeno, API Key de A usada contra sensor de B
+- **JWT:** firma manipulada, expirado, sin `tenant_id`
+- **API Key:** inválida, cross-tenant, sin autenticación
+- **`/register`:** sin token (401), rol insuficiente (403), escalada de privilegios (403)
+- **Aislamiento de datos:** sin exposición de `api_key`/`key_hash`/`password` en listados
+- **Hash de contraseñas:** verificación Argon2id en BD
+- **Validación de entrada:** rol inválido → 422 (Pydantic)
+- **Cabeceras HTTP de seguridad:** `nosniff`, `DENY`, `HSTS`, `CSP`
+- **Rate limiting:** 4.º login → 429
 
 ---
 
@@ -160,9 +198,14 @@ apps/backend/db/
 
 ### Modelo de autenticación
 
-- **Usuarios humanos**: JWT RS256 con `tenant_id` y `role` en el payload. Emitido por `/auth/login`.
-- **Agentes sensores**: API Key por header `X-API-Key`. Validada contra `alma.sensor_credentials` (JOIN por `sensor_id` y `tenant_id`, `hmac.compare_digest`).
-- **Enrollment**: clave compartida (`ENROLLMENT_KEY`) + `X-Tenant-ID`. Genera API Key del canal `control`.
+- **Usuarios humanos:** JWT RS256 con `tenant_id` y `role` en el payload. Emitido por `/auth/login`. Algoritmo fijo (`RS256`), `iss`/`aud`/`exp` validados.
+- **Registro de usuarios (`POST /auth/register`):** protegido con `require_roles("super_admin", "tenant_admin")`.
+  - `tenant_admin` solo puede crear roles `{admin, analyst, sensor}` en su propio tenant.
+  - `super_admin` puede crear cualquier rol del sistema.
+  - El `tenant_id` del nuevo usuario se deriva del token del creador; `X-Tenant-ID` se ignora.
+- **Bootstrap:** el primer `super_admin` se crea con `scripts/bootstrap_admin.py`. Requiere las variables `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_TENANT_*` en `.env`.
+- **Agentes sensores:** API Key por header `X-API-Key`. Validada contra `alma.sensor_credentials` (JOIN por `sensor_id` y `tenant_id`, `hmac.compare_digest`).
+- **Enrollment:** clave compartida (`ENROLLMENT_KEY`) + `X-Tenant-ID`. Genera API Key del canal `control`.
 
 ### Modelo de tenant
 
@@ -174,20 +217,27 @@ apps/backend/db/
 
 ## Problemas conocidos
 
-La línea base actual tiene los siguientes huecos identificados y pendientes de corrección. **No usar en producción hasta cerrarlos.**
+### Cerrados en la sesión 2026-10-12 (Incremento 0004)
 
-| # | Problema | Severidad |
+| # | Problema | Commit |
 |---|---|---|
-| 1 | `POST /api/v1/auth/register` es público y acepta `role` del cuerpo. Explotable con roles permitidos por `users_role_check` (p. ej. `analyst`) | 🔴 Crítico |
-| 2 | `config.py` cae a `alma_dev` (superusuario) si falta la credencial de `alma_app` | 🔴 Crítico |
-| 3 | `database.py` usa `set_config(..., false)` (sesión, no transacción). Riesgo de fuga entre conexiones del pool | 🟠 Alto |
-| 4 | `deps.py` acepta `X-Tenant-ID` como fuente de autorización cuando no hay JWT | 🟠 Alto |
-| 5 | `users_role_check` no permite `super_admin` ni `tenant_admin`. La rama de roles de plataforma en `require_roles(...)` es código muerto | 🟠 Alto |
-| 6 | JWT no exige `exp` presente; sin `kid` para rotación de claves | 🟡 Medio |
-| 7 | `alma_migrator` tiene login habilitado; debería ser `NOLOGIN` en producción | 🟡 Medio |
-| 8 | Credencial de `alma_app` en variable de entorno (12 caracteres) en lugar de archivo en `secrets/` con 32+ bytes | 🟡 Medio |
+| C1 | `POST /auth/register` público con `role` del cuerpo | `e61671d` |
+| C2 | `config.py` con fallback silencioso a `alma_dev` | `6a0721c` |
+| C3 | `users_role_check` incompleto (sin `super_admin`/`tenant_admin`) | `5205b50` |
+| C4 | Bearer del heartbeat sin `tenant_id` (bypass cross-tenant) | `ab6682e` |
 
-Ver `ALMA_CLOUD_MASTER_CONTEXT.md` para el detalle completo y el plan de cierre.
+### Abiertos (no usar en producción hasta cerrarlos)
+
+| # | Problema | Severidad | Deuda |
+|---|---|---|---|
+| 1 | `database.py` usa `set_config(..., false)` (sesión, no transacción). Riesgo de fuga entre conexiones del pool | 🟠 Alto | Inc. 0007 |
+| 2 | `deps.py` acepta `X-Tenant-ID` como fuente de autorización cuando no hay JWT | 🟠 Alto | Inc. 0005 |
+| 3 | JWT no exige `exp` presente ni `kid` para rotación de claves | 🟡 Medio | Inc. 0006 |
+| 4 | `alma_migrator` tiene login habilitado; debería ser `NOLOGIN` en producción | 🟡 Medio | — |
+| 5 | `python-jose` con CVE-2026-85394 (mitigado por diseño: `algorithms=["RS256"]` fijo) | 🟡 Medio | Inc. 0008 |
+| 6 | Credencial de `alma_app` en variable de entorno en lugar de archivo en `secrets/` con 32+ bytes | 🟡 Medio | — |
+
+Ver `docs/audits/` para reportes y análisis detallados, y `ALMA_CLOUD_MASTER_CONTEXT.md` para el plan completo de incrementos.
 
 ---
 

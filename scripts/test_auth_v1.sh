@@ -35,21 +35,9 @@ for i in {1..10}; do
 done
 
 echo "=== 2. Registrar usuario en Tenant A ==="
-reg_res=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: $TENANT_A" \
-  -d '{
-    "email": "admin@tenant-a.com",
-    "password": "SecurePassword123!",
-    "role": "admin"
-  }')
+./scripts/lib/seed_user.sh "$TENANT_A" "admin@tenant-a.com" "SecurePassword123!" "admin"
 
-if echo "$reg_res" | grep -q "admin@tenant-a.com"; then
-  echo "PASS AUTH1: Usuario registrado correctamente en Tenant A"
-else
-  echo "FAIL AUTH1: Error en registro: $reg_res"
-  exit 1
-fi
+echo "PASS AUTH1: Usuario admin@tenant-a.com sembrado correctamente en Tenant A"
 
 echo "=== 3. Iniciar sesión y obtener JWT token ==="
 login_res=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \

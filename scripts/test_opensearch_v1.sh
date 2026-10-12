@@ -34,11 +34,9 @@ for i in {1..10}; do
   sleep 0.5
 done
 
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "admin-os@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "admin-os@tenant-a.com" "Password123!" "admin"
 
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_B" \
-  -d '{"email": "admin-os@tenant-b.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_B" "admin-os@tenant-b.com" "Password123!" "admin"
 
 TOKEN_A=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
   -d '{"email": "admin-os@tenant-a.com", "password": "Password123!"}' | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)

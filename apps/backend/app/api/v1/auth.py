@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, require_roles
 from app.core.security import hash_password, verify_password, create_access_token
 from app.models.domain import User, AuditLog
 from app.schemas.domain import UserCreate, UserRead, LoginRequest, TokenRead
@@ -11,26 +11,35 @@ from app.schemas.domain import UserCreate, UserRead, LoginRequest, TokenRead
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+ALLOWED_ROLES_FOR_TENANT_ADMIN = {"admin", "analyst", "sensor"}
+
+
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_in: UserCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("super_admin", "tenant_admin")),
 ):
-    res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
-    tenant_id_str = res.scalar()
-    if not tenant_id_str:
+    # Jerarquía: tenant_admin no puede crear roles elevados
+    if current_user.role == "tenant_admin" and user_in.role not in ALLOWED_ROLES_FOR_TENANT_ADMIN:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contexto de tenant no configurado."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Un tenant_admin no puede crear el rol '{user_in.role}'. "
+                f"Roles permitidos: {sorted(ALLOWED_ROLES_FOR_TENANT_ADMIN)}"
+            ),
         )
 
-    tenant_uuid = UUID(tenant_id_str)
+    # El tenant destino SIEMPRE sale de la credencial
+    tenant_uuid = current_user.tenant_id
 
-    existing = await db.execute(select(User).where(User.email == user_in.email))
+    existing = await db.execute(
+        select(User).where(User.tenant_id == tenant_uuid, User.email == user_in.email)
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El correo electrónico ya se encuentra registrado."
+            detail="El correo electrónico ya se encuentra registrado en este tenant."
         )
 
     user = User(
@@ -45,11 +54,15 @@ async def register_user(
 
         audit_entry = AuditLog(
             tenant_id=tenant_uuid,
-            actor_type="system",
-            actor_id="auth_service",
+            actor_type="user",
+            actor_id=str(current_user.id),
             action="user.register",
             resource=f"user:{user.id}",
-            details={"email": user.email, "role": user.role}
+            details={
+                "email": user.email,
+                "role": user.role,
+                "created_by": str(current_user.id),
+            },
         )
         db.add(audit_entry)
 

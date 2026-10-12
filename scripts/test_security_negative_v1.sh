@@ -40,13 +40,9 @@ for i in {1..15}; do
   sleep 0.5
 done
 
-curl -s -X POST $API/api/v1/auth/register \
-  -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "user_a@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "user_a@tenant-a.com" "Password123!" "admin"
 
-curl -s -X POST $API/api/v1/auth/register \
-  -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_B" \
-  -d '{"email": "user_b@tenant-b.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_B" "user_b@tenant-b.com" "Password123!" "admin"
 
 TOKEN_A=$(curl -s -X POST $API/api/v1/auth/login \
   -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \

@@ -36,10 +36,7 @@ for i in {1..15}; do
 done
 
 echo "=== 2. Registrar usuario e iniciar sesión para obtener Token ==="
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "sec_user@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "sec_user@tenant-a.com" "Password123!" "admin"
 
 login_res=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \

@@ -33,9 +33,7 @@ for i in {1..15}; do
 done
 
 echo "=== 2. Registrando usuario y obteniendo token ==="
-curl -s -X POST $API/api/v1/auth/register \
-  -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "eve_user@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "eve_user@tenant-a.com" "Password123!" "admin"
 
 TOKEN=$(curl -s -X POST $API/api/v1/auth/login \
   -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \

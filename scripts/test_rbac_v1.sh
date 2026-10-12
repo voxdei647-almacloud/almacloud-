@@ -30,11 +30,9 @@ for i in {1..10}; do
 done
 
 echo "=== 2. Registrar Usuario Admin y Usuario Analyst ==="
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "admin-rbac@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "admin-rbac@tenant-a.com" "Password123!" "admin"
 
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "analyst-rbac@tenant-a.com", "password": "Password123!", "role": "analyst"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "analyst-rbac@tenant-a.com" "Password123!" "analyst"
 
 TOKEN_ADMIN=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
   -d '{"email": "admin-rbac@tenant-a.com", "password": "Password123!"}' | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)

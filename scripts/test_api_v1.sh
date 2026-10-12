@@ -35,11 +35,9 @@ for i in {1..10}; do
 done
 
 # Registrar y autenticar usuarios para Tenant A y Tenant B
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
-  -d '{"email": "admin-api@tenant-a.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_A" "admin-api@tenant-a.com" "Password123!" "admin"
 
-curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_B" \
-  -d '{"email": "admin-api@tenant-b.com", "password": "Password123!", "role": "admin"}' > /dev/null
+./scripts/lib/seed_user.sh "$TENANT_B" "admin-api@tenant-b.com" "Password123!" "admin"
 
 TOKEN_A=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login -H "Content-Type: application/json" -H "X-Tenant-ID: $TENANT_A" \
   -d '{"email": "admin-api@tenant-a.com", "password": "Password123!"}' | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)

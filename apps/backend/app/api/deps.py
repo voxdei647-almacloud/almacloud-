@@ -78,24 +78,19 @@ async def get_current_user(
 
 async def get_current_sensor(
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> Sensor:
-    if not x_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Se requiere el encabezado 'X-API-Key'."
-        )
+    """NO USAR — implementación rota.
 
-    res = await db.execute(select(Sensor).where(Sensor.lifecycle_status == "active"))
-    sensors = res.scalars().all()
-
-    if not sensors:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API Key inválida o sensor inactivo."
-        )
-
-    return sensors[0]
+    Esta función devolvía el primer sensor activo del tenant sin comparar
+    el hash de la API Key. Es un bypass de autenticación silencioso.
+    Se reemplaza por la versión correcta en el Incremento 0006, que hará
+    JOIN contra alma.sensor_credentials y hmac.compare_digest.
+    """
+    raise NotImplementedError(
+        "get_current_sensor está deshabilitado hasta Inc. 0006. "
+        "Usar require_roles() o el flujo de sensor_credentials."
+    )
 
 
 def require_roles(*allowed_roles: str):

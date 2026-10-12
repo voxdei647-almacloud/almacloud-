@@ -187,24 +187,33 @@ async def register_heartbeat(
         try:
             from app.core.security import decode_access_token
             payload = decode_access_token(token)
-            if isinstance(payload, dict):
-                effective_tenant_id = (
-                    payload.get("tenant_id")
-                    or payload.get("tid")
-                    or payload.get("tenant")
-                )
-            else:
-                effective_tenant_id = getattr(payload, "tenant_id", None)
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token JWT inválido o expirado."
             )
 
-        # Verificar que el sensor exista y pertenezca al tenant del JWT
+        if not payload or not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token JWT inválido o expirado."
+            )
+
+        effective_tenant_id = (
+            payload.get("tenant_id")
+            or payload.get("tid")
+            or payload.get("tenant")
+        )
+
+        if not effective_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token JWT sin tenant_id válido."
+            )
+
         sensor_res = await db.execute(
             text("SELECT id FROM alma.sensors WHERE id = :sensor_id AND tenant_id = :tenant_id"),
-            {"sensor_id": str(sensor_id), "tenant_id": effective_tenant_id}
+            {"sensor_id": str(sensor_id), "tenant_id": str(effective_tenant_id)}
         )
         if not sensor_res.first():
             raise HTTPException(

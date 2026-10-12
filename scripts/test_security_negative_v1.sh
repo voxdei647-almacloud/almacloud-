@@ -166,4 +166,42 @@ else
   exit 1
 fi
 
+echo "=== 9. Negativo 6: JWT válido SIN tenant_id (bypass del fallback) ==="
+
+NO_TENANT_TOKEN=$(PYTHONPATH="$(pwd)/apps/backend" python3 - <<'PYGEN'
+import sys
+sys.path.insert(0, "apps/backend")
+from app.core.security import get_private_key, JWT_ALGORITHM, JWT_ISSUER, JWT_AUDIENCE
+from jose import jwt
+from datetime import datetime, timedelta, timezone
+
+now = datetime.now(timezone.utc)
+payload = {
+    "sub": "00000000-0000-0000-0000-000000000000",
+    "iss": JWT_ISSUER,
+    "aud": JWT_AUDIENCE,
+    "exp": now + timedelta(minutes=10),
+    "iat": now,
+    "role": "admin",
+}
+print(jwt.encode(payload, get_private_key(), algorithm=JWT_ALGORITHM))
+PYGEN
+)
+
+if [ -z "$NO_TENANT_TOKEN" ]; then
+  echo "FAIL SEC_NEG6: No se pudo generar el token sin tenant_id"
+  exit 1
+fi
+
+code_no_tenant=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/api/v1/sensors/$SENSOR_A_ID/heartbeat" \
+  -H "Authorization: Bearer $NO_TENANT_TOKEN" \
+  -H "X-Tenant-ID: $TENANT_A")
+
+if [ "$code_no_tenant" -eq 401 ] || [ "$code_no_tenant" -eq 404 ]; then
+  echo "PASS SEC_NEG6: JWT sin tenant_id rechazado con HTTP $code_no_tenant"
+else
+  echo "FAIL SEC_NEG6: Se esperaba HTTP 401/404 pero se obtuvo HTTP $code_no_tenant (¿el fallback 'else' sigue vivo?)"
+  exit 1
+fi
+
 echo "--- RESULTADO FINAL: TODAS LAS PRUEBAS NEGATIVAS DE SEGURIDAD PASARON (100%) ---"

@@ -1,12 +1,14 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Literal, Optional, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 
+RoleType = Literal["super_admin", "tenant_admin", "admin", "analyst", "sensor", "system"]
+
 class UserBase(BaseModel):
     email: EmailStr
-    role: str = Field(default="analyst", description="Roles válidos: super_admin, tenant_admin, admin, analyst, sensor, system")
+    role: RoleType = Field(default="analyst", description="Roles válidos en el sistema ALMA.")
 
 
 class UserCreate(UserBase):

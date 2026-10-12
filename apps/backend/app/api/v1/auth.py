@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
@@ -38,21 +39,29 @@ async def register_user(
         password_hash=hash_password(user_in.password),
         role=user_in.role
     )
-    db.add(user)
-    await db.flush()
+    try:
+        db.add(user)
+        await db.flush()
 
-    audit_entry = AuditLog(
-        tenant_id=tenant_uuid,
-        actor_type="system",
-        actor_id="auth_service",
-        action="user.register",
-        resource=f"user:{user.id}",
-        details={"email": user.email, "role": user.role}
-    )
-    db.add(audit_entry)
+        audit_entry = AuditLog(
+            tenant_id=tenant_uuid,
+            actor_type="system",
+            actor_id="auth_service",
+            action="user.register",
+            resource=f"user:{user.id}",
+            details={"email": user.email, "role": user.role}
+        )
+        db.add(audit_entry)
 
-    await db.commit()
-    await db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Error de registro: el usuario ya existe o los datos no cumplen con las restricciones del sistema."
+        )
+
     return user
 
 

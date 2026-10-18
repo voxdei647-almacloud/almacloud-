@@ -17,7 +17,8 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_roles
-from app.models.domain import Tenant, Sensor, AuditLog, User
+from app.models.domain import Tenant, Sensor, AuditLog, User, BillingSnapshot
+from sqlalchemy import text
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 SUPER = Depends(require_roles("super_admin"))
@@ -107,10 +108,41 @@ async def billing_metrics(db: AsyncSession = Depends(get_db), _: User = SUPER):
     total = (await db.execute(select(func.count(Tenant.id)))).scalar() or 0
     active = (await db.execute(select(func.count(Tenant.id)).where(Tenant.status == "active"))).scalar() or 0
     past_due = (await db.execute(select(func.count(Tenant.id)).where(Tenant.status == "past_due"))).scalar() or 0
+
+    # Calcular MRR del mes actual
+    now = datetime.now(timezone.utc)
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    mrr_query = select(func.sum(BillingSnapshot.amount_usd)).where(
+        BillingSnapshot.status == "paid",
+        BillingSnapshot.snapshot_date >= start_of_month
+    )
+    mrr = float((await db.execute(mrr_query)).scalar() or 0)
+
+    # Calcular Historial de MRR (últimos 6 meses)
+    history_query = text("""
+        SELECT TO_CHAR(snapshot_date, 'YYYY-MM') as month, SUM(amount_usd) as value
+        FROM alma.billing_snapshots
+        WHERE status = 'paid'
+        GROUP BY month
+        ORDER BY month DESC
+        LIMIT 6
+    """)
+    history_res = await db.execute(history_query)
+    mrr_history = [{"month": row.month, "value": float(row.value)} for row in history_res.all()]
+    mrr_history.reverse() # Orden cronológico
+
     return {
-        "mrr": 0, "arr": 0, "gcp_cost": 0, "margin": 0,
-        "tenants_total": int(total), "tenants_active": int(active), "tenants_past_due": int(past_due),
-        "churn_rate": None, "mrr_history": [], "_mock": True,
+        "mrr": mrr, 
+        "arr": mrr * 12, 
+        "gcp_cost": 0, 
+        "margin": 0,
+        "tenants_total": int(total), 
+        "tenants_active": int(active), 
+        "tenants_past_due": int(past_due),
+        "churn_rate": None, 
+        "mrr_history": mrr_history, 
+        "_mock": False,
     }
 
 

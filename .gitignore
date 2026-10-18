@@ -23,3 +23,9 @@ secrets/*
 *.secret
 docker-compose.override.yml
 *.bak
+
+# Logs y temporales
+uvicorn.log
+*.log
+.pytest_cache/
+.env.bak.*

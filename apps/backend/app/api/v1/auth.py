@@ -83,10 +83,7 @@ async def login(
     login_in: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    res = await db.execute(text("SELECT current_setting('app.current_tenant_id', true)"))
-    tenant_id_str = res.scalar()
-    tenant_uuid = UUID(tenant_id_str)
-
+    # Buscamos al usuario por email
     user_res = await db.execute(select(User).where(User.email == login_in.email))
     user = user_res.scalar_one_or_none()
 
@@ -96,10 +93,23 @@ async def login(
             detail="Credenciales inválidas."
         )
 
-    token = create_access_token(subject=str(user.id), tenant_id=tenant_id_str)
+    # Usamos el tenant_id REAL del usuario
+    real_tenant_id = str(user.tenant_id)
+    
+    # IMPORTANTE: Actualizar el contexto de RLS al tenant real del usuario
+    await db.execute(
+        text("SELECT set_config('app.current_tenant_id', :t, true)"),
+        {"t": real_tenant_id}
+    )
+    await db.execute(
+        text("SELECT set_config('app.current_role', :r, true)"),
+        {"r": user.role}
+    )
+
+    token = create_access_token(subject=str(user.id), tenant_id=real_tenant_id)
 
     audit_entry = AuditLog(
-        tenant_id=tenant_uuid,
+        tenant_id=user.tenant_id,  # <-- REAL tenant_id
         actor_type="user",
         actor_id=str(user.id),
         action="user.login",
@@ -112,7 +122,7 @@ async def login(
     return TokenRead(
         access_token=token,
         token_type="bearer",
-        tenant_id=tenant_uuid
+        tenant_id=user.tenant_id
     )
 
 

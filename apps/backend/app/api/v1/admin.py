@@ -1,29 +1,37 @@
-"""Router de administración — CAPA DE AGREGACIÓN para el dashboard admin.
-
-NO reemplaza los endpoints base de ALMA (`/tenants`, `/audit-logs`, `/healthz`).
-Consumido solo por el proxy del SIEM (Bearer ALMA_SERVICE_TOKEN).
-Contrato v1 CONGELADO — no cambiar formatos JSON.
-
-TODO(billing): MRR real cuando exista `billing_snapshots`.
-TODO(B11): migrar de alma_dev (superusuario) a alma_app con RLS forzado.
-TODO(auth): JWT de servicio (aud=siem, scope=admin, 15 min) vs token estático.
-"""
+"""Router de administración — CAPA DE AGREGACIÓN para el dashboard admin."""
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import select, func
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_roles
+from app.core.security import hash_password
 from app.models.domain import Tenant, Sensor, AuditLog, User, BillingSnapshot
-from sqlalchemy import text
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 SUPER = Depends(require_roles("super_admin"))
 
 
+# ──────────────────────────────────────────────
+# Modelos Pydantic para Escritura (POST/PATCH)
+# ──────────────────────────────────────────────
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    role: str = "tenant_admin"
+
+
+class TenantStatusUpdate(BaseModel):
+    status: str  # 'active', 'past_due', 'suspended'
+
+
+# ──────────────────────────────────────────────
+# Helpers de serialización
+# ──────────────────────────────────────────────
 def _tenant(t: Tenant, agents: int) -> dict:
     return {
         "id": str(t.id),
@@ -47,6 +55,9 @@ def _audit(log: AuditLog) -> dict:
     }
 
 
+# ──────────────────────────────────────────────
+# ENDPOINTS GET (Lectura)
+# ──────────────────────────────────────────────
 @router.get("/tenants")
 async def list_tenants(
     response: Response,
@@ -109,7 +120,6 @@ async def billing_metrics(db: AsyncSession = Depends(get_db), _: User = SUPER):
     active = (await db.execute(select(func.count(Tenant.id)).where(Tenant.status == "active"))).scalar() or 0
     past_due = (await db.execute(select(func.count(Tenant.id)).where(Tenant.status == "past_due"))).scalar() or 0
 
-    # Calcular MRR del mes actual
     now = datetime.now(timezone.utc)
     start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
@@ -119,7 +129,6 @@ async def billing_metrics(db: AsyncSession = Depends(get_db), _: User = SUPER):
     )
     mrr = float((await db.execute(mrr_query)).scalar() or 0)
 
-    # Calcular Historial de MRR (últimos 6 meses)
     history_query = text("""
         SELECT TO_CHAR(snapshot_date, 'YYYY-MM') as month, SUM(amount_usd) as value
         FROM alma.billing_snapshots
@@ -130,19 +139,12 @@ async def billing_metrics(db: AsyncSession = Depends(get_db), _: User = SUPER):
     """)
     history_res = await db.execute(history_query)
     mrr_history = [{"month": row.month, "value": float(row.value)} for row in history_res.all()]
-    mrr_history.reverse() # Orden cronológico
+    mrr_history.reverse()
 
     return {
-        "mrr": mrr, 
-        "arr": mrr * 12, 
-        "gcp_cost": 0, 
-        "margin": 0,
-        "tenants_total": int(total), 
-        "tenants_active": int(active), 
-        "tenants_past_due": int(past_due),
-        "churn_rate": None, 
-        "mrr_history": mrr_history, 
-        "_mock": False,
+        "mrr": mrr, "arr": mrr * 12, "gcp_cost": 0, "margin": 0,
+        "tenants_total": int(total), "tenants_active": int(active), "tenants_past_due": int(past_due),
+        "churn_rate": None, "mrr_history": mrr_history, "_mock": False,
     }
 
 
@@ -182,3 +184,84 @@ async def recent_audit(
         except ValueError:
             pass
     return [_audit(log) for log in (await db.execute(stmt)).scalars().all()]
+
+
+# ──────────────────────────────────────────────
+# ENDPOINTS DE ESCRITURA (POST/DELETE/PATCH)
+# ──────────────────────────────────────────────
+@router.post("/tenants/{tenant_id}/users", status_code=status.HTTP_201_CREATED)
+async def create_tenant_user(
+    tenant_id: str,
+    payload: AdminUserCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = SUPER
+):
+    try:
+        tid = UUID(tenant_id)
+    except ValueError:
+        raise HTTPException(404, "Tenant no encontrado")
+
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == tid))).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(404, "Tenant no encontrado")
+
+    existing = (await db.execute(select(User).where(User.tenant_id == tid, User.email == payload.email))).scalar_one_or_none()
+    if existing:
+        raise HTTPException(400, "El correo ya está registrado en este tenant")
+
+    new_user = User(
+        tenant_id=tid,
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        role=payload.role
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    return {"id": str(new_user.id), "email": new_user.email, "role": new_user.role}
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = SUPER
+):
+    try:
+        uid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    await db.delete(user)
+    await db.commit()
+    return None
+
+
+@router.patch("/tenants/{tenant_id}/status")
+async def update_tenant_status(
+    tenant_id: str,
+    payload: TenantStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = SUPER
+):
+    try:
+        tid = UUID(tenant_id)
+    except ValueError:
+        raise HTTPException(404, "Tenant no encontrado")
+
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == tid))).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(404, "Tenant no encontrado")
+
+    if payload.status not in ('active', 'past_due', 'suspended'):
+        raise HTTPException(400, "Estado inválido")
+
+    tenant.status = payload.status
+    await db.commit()
+    
+    return {"id": str(tenant.id), "status": tenant.status}

@@ -18,18 +18,18 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False
 )
 
-
-async def get_tenant_db(tenant_id: str) -> AsyncGenerator[AsyncSession, None]:
-    """Provee una sesión de base de datos asíncrona con el contexto de tenant activo en RLS."""
+async def get_tenant_db(tenant_id: str, role: str = "") -> AsyncGenerator[AsyncSession, None]:
+    """Provee una sesión con contexto RLS a nivel de TRANSACCIÓN (SET LOCAL)."""
     async with AsyncSessionLocal() as session:
         await session.execute(
-            text("SELECT set_config('app.current_tenant_id', :tenant_id, false)"),
+            text("SELECT set_config('app.current_tenant_id', :tenant_id, true)"),
             {"tenant_id": tenant_id}
+        )
+        await session.execute(
+            text("SELECT set_config('app.current_role', :role, true)"),
+            {"role": role}
         )
         try:
             yield session
         finally:
-            try:
-                await session.execute(text("SELECT set_config('app.current_tenant_id', '', false)"))
-            except Exception:
-                pass
+            pass

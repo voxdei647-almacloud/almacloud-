@@ -15,7 +15,20 @@ from app.core.valkey import init_valkey, close_valkey, get_valkey_client
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("alma-backend")
 
-app = FastAPI(
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await init_valkey()
+    logger.info("Conexiones inicializadas: Valkey")
+    yield
+    # Shutdown
+    await close_valkey()
+    logger.info("Conexiones cerradas: Valkey")
+
+app = FastAPI(lifespan=lifespan, 
     title="ALMA Cloud Backend API",
     version="1.0.0",
     description="Backend de Ciberseguridad Multitenant y Telemetría SOC (VOX DEI)",
@@ -32,16 +45,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Tenant-ID", "X-API-Key"],
 )
 
-# 2. Eventos de ciclo de vida para conexiones
-@app.on_event("startup")
-async def startup_event():
-    await init_valkey()
-    logger.info("Conexiones inicializadas: Valkey")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    await close_valkey()
-    logger.info("Conexiones cerradas: Valkey")
 
 # 3. Middleware de Seguridad: Rate Limiting y Cabeceras HTTP
 @app.middleware("http")

@@ -16,10 +16,6 @@ class Settings(BaseSettings):
     VALKEY_PORT: int = 6379
     VALKEY_PASSWORD: str = ""
 
-    OPENSEARCH_HOST: str = "127.0.0.1"
-    OPENSEARCH_PORT: int = 9200
-    OPENSEARCH_USER: str = "admin"
-    OPENSEARCH_PASSWORD: str = ""
 
     JWT_ALGORITHM: str = "RS256"
     JWT_PRIVATE_KEY_PATH: str = "secrets/jwt_private.pem"
@@ -61,14 +57,6 @@ class Settings(BaseSettings):
             return valkey_secret.read_text().strip()
         return ""
 
-    @property
-    def OPENSEARCH_AUTH_PASSWORD(self) -> str:
-        if self.OPENSEARCH_PASSWORD:
-            return self.OPENSEARCH_PASSWORD
-        os_secret = Path("secrets/opensearch_password")
-        if os_secret.is_file():
-            return os_secret.read_text().strip()
-        return "admin"
 
     model_config = SettingsConfigDict(
         env_file=".env",

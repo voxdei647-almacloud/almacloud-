@@ -61,51 +61,12 @@ services:
     networks:
       - alma-dev
 
-  opensearch:
-    image: ${OPENSEARCH_IMAGE:?OPENSEARCH_IMAGE es obligatorio}
-    container_name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-opensearch
-    restart: unless-stopped
-    environment:
-      discovery.type: single-node
-      bootstrap.memory_lock: "true"
-      OPENSEARCH_JAVA_OPTS: "-Xms${OPENSEARCH_HEAP:-512m} -Xmx${OPENSEARCH_HEAP:-512m}"
-      # SOLO DESARROLLO LOCAL:
-      # En este modo OpenSearch no tiene autenticación ni aislamiento entre tenants.
-      # Nunca debe usarse en producción ni exponerse fuera de loopback.
-      DISABLE_SECURITY_PLUGIN: "true"
-      # Evita la configuración demo del plugin de seguridad.
-      # PENDIENTE_VERIFICACION: confirmar que esta variable es aceptada por la imagen.
-      DISABLE_INSTALL_DEMO_CONFIG: "true"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    ports:
-      - "127.0.0.1:${OPENSEARCH_PORT:-9200}:9200"
-    volumes:
-      - opensearch_data:/usr/share/opensearch/data
-    healthcheck:
-      # PENDIENTE_VERIFICACION: confirmar que curl existe en la imagen de OpenSearch.
-      # Alternativa propuesta si no existe: usar herramienta presente en la imagen
-      # o healthcheck externo desde el host contra 127.0.0.1:9200.
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health | grep -Eq '\"status\":\"(green|yellow)\"'"]
-      interval: 30s
-      timeout: 10s
-      retries: 20
-      start_period: 120s
-    networks:
-      - alma-dev
 
 volumes:
   postgres_data:
     name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-postgres-data
   valkey_data:
     name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-valkey-data
-  opensearch_data:
-    name: ${COMPOSE_PROJECT_NAME:-alma-cloud-dev}-opensearch-data
 
 networks:
   alma-dev:

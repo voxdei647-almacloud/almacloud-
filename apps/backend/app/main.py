@@ -7,10 +7,9 @@ from fastapi.responses import RedirectResponse
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.sensors import router as sensors_router
-from app.api.v1.telemetry import router as telemetry_router
 from app.api.v1.audit import router as audit_router
+from app.api.v1.admin import router as admin_router
 
-from app.core.opensearch import init_opensearch, close_opensearch
 from app.core.valkey import init_valkey, close_valkey, get_valkey_client
 
 logging.basicConfig(level=logging.INFO)
@@ -36,15 +35,13 @@ app.add_middleware(
 # 2. Eventos de ciclo de vida para conexiones
 @app.on_event("startup")
 async def startup_event():
-    await init_opensearch()
     await init_valkey()
-    logger.info("Conexiones inicializadas: OpenSearch y Valkey")
+    logger.info("Conexiones inicializadas: Valkey")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    await close_opensearch()
     await close_valkey()
-    logger.info("Conexiones cerradas: OpenSearch y Valkey")
+    logger.info("Conexiones cerradas: Valkey")
 
 # 3. Middleware de Seguridad: Rate Limiting y Cabeceras HTTP
 @app.middleware("http")
@@ -86,8 +83,8 @@ async def security_headers_and_rate_limit(request: Request, call_next):
 # 4. Inclusión de Routers API v1
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(sensors_router, prefix="/api/v1")
-app.include_router(telemetry_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 
 # 5. Archivos Estáticos de la Interfaz Web
 static_dir = os.path.abspath(

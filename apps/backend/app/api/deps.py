@@ -3,12 +3,10 @@ from uuid import UUID
 from fastapi import Header, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import redis.asyncio as redis
-from opensearchpy import AsyncOpenSearch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_tenant_db
 from app.core.valkey import get_valkey_client
-from app.core.opensearch import get_opensearch_client
 from app.core.security import decode_access_token
 from app.models.domain import User, Sensor
 
@@ -107,6 +105,3 @@ def require_roles(*allowed_roles: str):
 async def get_valkey() -> redis.Redis:
     return await get_valkey_client()
 
-
-async def get_opensearch() -> AsyncOpenSearch:
-    return await get_opensearch_client()

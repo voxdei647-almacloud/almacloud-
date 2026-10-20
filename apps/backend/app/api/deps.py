@@ -19,11 +19,13 @@ async def get_db(
     token: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
 ) -> AsyncGenerator[AsyncSession, None]:
     tenant_id: Optional[str] = None
+    role: str = ""
 
     if token:
         payload = decode_access_token(token.credentials)
-        if payload and "tenant_id" in payload:
-            tenant_id = payload["tenant_id"]
+        if payload:
+            tenant_id = payload.get("tenant_id")
+            role = payload.get("role", "")
 
     if not tenant_id and x_tenant_id:
         tenant_id = x_tenant_id.strip()
@@ -34,7 +36,7 @@ async def get_db(
             detail="Se requiere un token Bearer o el encabezado 'X-Tenant-ID'."
         )
 
-    async for session in get_tenant_db(tenant_id):
+    async for session in get_tenant_db(tenant_id, role):
         yield session
 
 

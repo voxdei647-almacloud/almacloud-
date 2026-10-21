@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    ALMA_SERVICE_TOKEN: str = ""
+
     POSTGRES_USER: str = "alma_dev"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_APP_USER: str = "alma_app"

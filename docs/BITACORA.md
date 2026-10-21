@@ -9,6 +9,12 @@
 
 ## Hitos y Cambios
 
+### 2026-10-18 — Limpieza Técnica Pre-Producción (Rama: `chore/tech-debt-cleanup`)
+- **Docker Prod:** Eliminado el servicio y volumen de OpenSearch en `docker-compose.prod.yml`. Restaurada la red `alma_network`.
+- **Pydantic v2:** Migrado `class Config` a `model_config = ConfigDict(...)` y `example=` a `json_schema_extra`.
+- **FastAPI Lifespan:** Reemplazado `@app.on_event` por `@asynccontextmanager`.
+- **Tests:** 6/6 pasando, 0 warnings.
+
 ### 2026-10-18 — Integración E2E y Facturación Real (Fases B y C)
 - **Autenticación Cross-VM:** El SIEM (VM 105) consume exitosamente los endpoints de ALMA (VM 107) usando `ALMA_SERVICE_TOKEN`.
 - **Login Arreglado:** Se resolvió el bug de RLS en `audit_logs` durante el login. El JWT ahora se emite con el `tenant_id` real.

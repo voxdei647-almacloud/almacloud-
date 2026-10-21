@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional, Dict, Any
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 RoleType = Literal["super_admin", "tenant_admin", "admin", "analyst", "sensor", "system"]
@@ -21,8 +21,7 @@ class UserRead(UserBase):
     is_active: bool = True
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LoginRequest(BaseModel):
@@ -73,14 +72,13 @@ class SensorRead(SensorBase):
     is_active: bool = True
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TelemetryCreate(BaseModel):
     sensor_id: Optional[UUID] = None
-    event_type: str = Field(..., example="alert")
-    severity: str = Field(..., example="high")
+    event_type: str = Field(..., json_schema_extra={"example": "alert"})
+    severity: str = Field(..., json_schema_extra={"example": "high"})
     source_ip: Optional[str] = None
     destination_ip: Optional[str] = None
     raw_event: Dict[str, Any] = Field(default_factory=dict)

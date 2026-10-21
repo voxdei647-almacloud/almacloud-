@@ -29,80 +29,10 @@ services:
     networks:
       - alma_network
 
-  opensearch:
-    image: opensearchproject/opensearch:2.19.6
-    container_name: alma_opensearch
-    restart: always
-    environment:
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "127.0.0.1:9200:9200"
-    volumes:
-      - opensearch_data:/usr/share/opensearch/data
-    networks:
-      - alma_network
-
-  backend:
-    build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
-    container_name: alma_backend
-    restart: always
-    environment:
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-alma_cloud}
-      - POSTGRES_USER=${POSTGRES_USER:-alma_dev}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_APP_PASSWORD=${POSTGRES_APP_PASSWORD}
-      - VALKEY_HOST=valkey
-      - VALKEY_PORT=6379
-      - OPENSEARCH_HOST=opensearch
-      - OPENSEARCH_PORT=9200
-      - ENABLE_RATE_LIMIT=${ENABLE_RATE_LIMIT:-true}
-    expose:
-      - "8000"
-    depends_on:
-      - postgres
-      - valkey
-      - opensearch
-    networks:
-      - alma_network
-
-  frontend:
-    build:
-      context: ./apps/frontend
-      dockerfile: Dockerfile
-    container_name: alma_frontend
-    restart: always
-    environment:
-      - PORT=3000
-    expose:
-      - "3000"
-    networks:
-      - alma_network
-
-  proxy:
-    image: nginx:alpine
-    container_name: alma_proxy
-    restart: always
-    ports:
-      - "127.0.0.1:80:80"
-    volumes:
-      - ./apps/proxy/conf.d:/etc/nginx/conf.d:ro
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - alma_network
+volumes:
+  postgres_data:
+  valkey_data:
 
 networks:
   alma_network:
     driver: bridge
-
-volumes:
-  postgres_data:
-  valkey_data:
-  opensearch_data:

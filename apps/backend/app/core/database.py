@@ -21,6 +21,7 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_tenant_db(tenant_id: str, role: str = "") -> AsyncGenerator[AsyncSession, None]:
     """Provee una sesión con contexto RLS a nivel de TRANSACCIÓN (SET LOCAL)."""
     async with AsyncSessionLocal() as session:
+        # El `true` al final es CRÍTICO: hace que la configuración sea local a la transacción
         await session.execute(
             text("SELECT set_config('app.current_tenant_id', :tenant_id, true)"),
             {"tenant_id": tenant_id}
